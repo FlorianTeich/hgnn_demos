@@ -40,8 +40,8 @@ app = typer.Typer()
 
 @app.command()
 def generate_toy_data():
-    """Generate Toy Data"""
-    NUM_SAMPLES=100
+    """Generate toy data"""
+    NUM_SAMPLES=100000
     sqlite_file_path = str(pathlib.Path(__file__).parent.parent.resolve()) + "/data/backend.db"
     print(sqlite_file_path)
     backend = create_engine("sqlite:///" + sqlite_file_path)
@@ -159,6 +159,7 @@ def migrate_data_to_kuzu():
 
 @app.command()
 def train_test_loop():
+    """Train HGNN on the toy data"""
     db = kuzu.Database(str(pathlib.Path(__file__).parent.parent.resolve()) + "/data/demo")
     persons = pd.read_parquet(str(pathlib.Path(__file__).parent.parent.resolve()) + "/data/persons.parquet")
     train_inds = torch.tensor(persons[persons["mode"] == "train"].index.tolist(), dtype=torch.long)
@@ -225,7 +226,7 @@ def train_test_loop():
         preds = []
         ytrue = []
 
-    for i in tqdm(range(10)):
+    for i in tqdm(range(1)):
         train(i)
         test(i)
     
@@ -234,10 +235,12 @@ def train_test_loop():
 
 @app.command()
 def explain():
+    """Generate visual explanations to some of the test data"""
     pass
 
 @app.command()
 def prepare_transformer_benchmark():
+    """Prepare data for Transformer model benchmark"""
     persons = pd.read_parquet(str(pathlib.Path(__file__).parent.parent.resolve()) + "/data/persons.parquet")
     diagnosis_data = pd.read_parquet(str(pathlib.Path(__file__).parent.parent.resolve()) + "/data/diagnoses.parquet")
     drug_data = pd.read_parquet(str(pathlib.Path(__file__).parent.parent.resolve()) + "/data/drugs.parquet")
@@ -259,6 +262,7 @@ def prepare_transformer_benchmark():
 
 @app.command()
 def benchmark_transformer():
+    """Train a Transformer model on the toy data"""
     import torch
     from tqdm.auto import tqdm
     from torch.utils.data import DataLoader
@@ -282,12 +286,11 @@ def benchmark_transformer():
     MAX_LEN = 192
     modelname = "distilbert-base-uncased"
     tokenizername = "google/byt5-small"
-    epochs = 100
-    train_is_test_data = False
+    epochs = 10
     batch_size = 8
 
     settings = DistilBertConfig(n_heads=4, n_layers=4, num_labels=2)
-    cmodel = AutoModelForSequenceClassification.from_pretrained("distilbert-base-uncased", config=settings)
+    cmodel = AutoModelForSequenceClassification.from_pretrained(modelname, config=settings)
     tokenizer = AutoTokenizer.from_pretrained(tokenizername)
     tokenizer.add_special_tokens({'pad_token': '[PAD]'})
     tokenizer.add_special_tokens({'cls_token': '[CLS]'})
@@ -364,6 +367,7 @@ def benchmark_transformer():
         print(acc)
 
 def benchmark_xgboost():
+    """Train an XGBoost model on the toy data"""
     pass
 
 if __name__ == '__main__':
