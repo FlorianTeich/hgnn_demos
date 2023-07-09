@@ -1,23 +1,13 @@
-import numpy as np
-from tqdm import tqdm
-from sentence_transformers import SentenceTransformer
-import torch
-import kuzu
 import pathlib
 from multiprocessing import cpu_count
+import yaml
+from yaml.loader import SafeLoader
+import numpy as np
+import torch
 import torch_geometric.transforms as T
-from torch.utils.tensorboard import SummaryWriter
-from torch_geometric.data import Batch, Dataset
+from sentence_transformers import SentenceTransformer
 from torch_geometric.loader import NeighborLoader
-from torch_geometric.nn import (MLP, BatchNorm, GraphConv, MultiAggregation,
-                                SAGEConv, to_hetero)
-from torch_geometric.nn import (MLP, BatchNorm, LayerNorm, GraphConv, MultiAggregation,
-                                    SAGEConv, to_hetero)
-from torch import Tensor
-from torch.nn import Linear
-import torch.nn.functional as F
-import torch_geometric.transforms as T
-
+from tqdm import tqdm
 
 model_name='all-MiniLM-L6-v2'
 model_string_encoder = SentenceTransformer(model_name)
@@ -27,7 +17,13 @@ def encode_strings(df):
     x = model_string_encoder.encode(df.values, show_progress_bar=True)
     return x
 
-def get_loaders(db, LOADER_BATCH_SIZE, train_inds, test_inds):
+def load_yaml(path='../default.yml'):
+    with open(path) as f:
+        data = yaml.load(f, Loader=SafeLoader)
+        #print(data)
+    return data
+
+def get_loaders(db, LOADER_BATCH_SIZE, train_inds, test_inds, target_entity):
     feature_store, graph_store = db.get_torch_geometric_remote_backend(4)
 
     transform = T.Compose([T.ToUndirected(), T.AddSelfLoops()
@@ -35,11 +31,9 @@ def get_loaders(db, LOADER_BATCH_SIZE, train_inds, test_inds):
 
     train_loader = NeighborLoader(
         data=(feature_store, graph_store),
-        num_neighbors={('diagnosis', 'assigned_to', 'person'): [-1],
-                        ('drug', 'consumed_by', 'person'): [-1],
-                    },
+        num_neighbors=[-1],
         batch_size=LOADER_BATCH_SIZE,
-        input_nodes=('person', train_inds),
+        input_nodes=(target_entity, train_inds),
         transform=transform,
         disjoint=True,
         num_workers=4,
@@ -50,11 +44,9 @@ def get_loaders(db, LOADER_BATCH_SIZE, train_inds, test_inds):
 
     test_loader = NeighborLoader(
         data=(feature_store, graph_store),
-        num_neighbors={('diagnosis', 'assigned_to', 'person'): [-1],
-                        ('drug', 'consumed_by', 'person'): [-1],
-                    },
+        num_neighbors=[-1],
         batch_size=LOADER_BATCH_SIZE,
-        input_nodes=('person', test_inds),
+        input_nodes=(target_entity, test_inds),
         transform=transform,
         disjoint=True,
         num_workers=4,
@@ -62,41 +54,6 @@ def get_loaders(db, LOADER_BATCH_SIZE, train_inds, test_inds):
         filter_per_worker=False,
     )
     return train_loader, test_loader
-
-
-class GraphLevelGNN(torch.nn.Module):
-    def __init__(self, hidden_size=32, num_classes=2):
-        super().__init__()
-        self.conv1 = SAGEConv(-1, hidden_size)
-        self.bn1 = BatchNorm(hidden_size)
-        self.pool = MultiAggregation(
-            aggrs=['mean', 'min', 'max'],
-            mode="cat"
-            )
-        self.lin = Linear(hidden_size*3, num_classes)
-
-    def forward(self, x: Tensor, edge_index: Tensor, batch: Tensor=None) -> Tensor:
-        x = self.conv1(x, edge_index)
-        x = F.gelu(x)
-        x = self.pool(x, batch)
-        x = self.lin(x)
-        return x
-
-
-def get_model_v1(device, batch):
-    learn_rate = 0.01
-    aggr = "max"
-
-    batch = batch.to(device)
-    metadata = batch.metadata()
-
-    model = GraphLevelGNN()
-    model = to_hetero(model, metadata, aggr=aggr, debug=True).to(device)
-
-    optimizer = torch.optim.Adam(model.parameters(), lr=learn_rate)
-
-    out = model(batch.x_dict, batch.edge_index_dict, batch.batch_dict)
-    return model, optimizer
 
 
 def create_kuzu_node_table(conn, tablename="paper", feature_dim=128):
