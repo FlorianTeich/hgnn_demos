@@ -37,7 +37,8 @@ import artificial_data
 import pathlib
 import yaml
 from yaml.loader import SafeLoader
-
+from rich import print
+from torch import optim
 
 app = typer.Typer()
 
@@ -50,7 +51,7 @@ def load_yaml(path='../default.yml'):
 @app.command()
 def generate_toy_data():
     """Generate toy data"""
-    NUM_SAMPLES=100000
+    NUM_SAMPLES=1000
     sqlite_file_path = str(pathlib.Path(__file__).parent.parent.resolve()) + "/data/backend.db"
     print(sqlite_file_path)
     backend = create_engine("sqlite:///" + sqlite_file_path)
@@ -64,14 +65,8 @@ def generate_toy_data():
     persons.loc[validate.index, "mode"] = "validate"
     persons.loc[test.index, "mode"] = "test"
 
-    # Create Short Codes
-    #diagnosis_data["diagnosis_short"] = diagnosis_data["DiagnosisCode"].str[:1]
-    #drug_data["drug_short"] = drug_data["DrugCode"].str[:1]
-
-    scaler2 = StandardScaler()
-    #diagnosis_data = pd.read_sql_table("diagnoses", con=backend)
-
     # Get gender and age
+    scaler2 = StandardScaler()
     le = preprocessing.LabelEncoder()
     le.fit(persons[persons["mode"] != "test"].Gender)
     persons["gender_encoded"] = le.fit_transform(persons.Gender)
@@ -143,6 +138,11 @@ def generate_toy_data():
     diagnosis_data.to_parquet(str(pathlib.Path(__file__).parent.parent.resolve()) + "/data/diagnoses.parquet")
     drug_data.to_parquet(str(pathlib.Path(__file__).parent.parent.resolve()) + "/data/drugs.parquet")
 
+    train_inds = pd.DataFrame({"ids": persons[persons["mode"] == "train"].index.tolist()})
+    test_inds = pd.DataFrame({"ids": persons[persons["mode"] == "test"].index.tolist()})
+    train_inds.to_parquet(str(pathlib.Path(__file__).parent.parent.resolve()) + "/data/train_ids.parquet")
+    test_inds.to_parquet(str(pathlib.Path(__file__).parent.parent.resolve()) + "/data/test_ids.parquet")
+
 
 @app.command()
 def migrate_data_to_kuzu(yamlfile="default.yml"):
@@ -166,19 +166,36 @@ def migrate_data_to_kuzu(yamlfile="default.yml"):
     
 
 @app.command()
-def train_test_loop():
+def train_test_loop(yamlfile="default.yml"):
     """Train HGNN on the toy data"""
-    db = kuzu.Database(str(pathlib.Path(__file__).parent.parent.resolve()) + "/data/demo")
-    persons = pd.read_parquet(str(pathlib.Path(__file__).parent.parent.resolve()) + "/data/persons.parquet")
-    train_inds = torch.tensor(persons[persons["mode"] == "train"].index.tolist(), dtype=torch.long)
-    test_inds = torch.tensor(persons[persons["mode"] == "test"].index.tolist(), dtype=torch.long)
-    train_loader, test_loader = utils.get_loaders(db, 32, train_inds, test_inds)
+    config = load_yaml(yamlfile)
+    db = kuzu.Database(config["backend"]["uri"])
+
+    target_entity = config["task"]["target_entity"]
+
+    train_inds = torch.tensor(pd.read_parquet(config["task"]["train_inds"])["ids"].values, dtype=torch.long)
+    test_inds = torch.tensor(pd.read_parquet(config["task"]["test_inds"])["ids"].values, dtype=torch.long)
+    
+    train_loader, test_loader = utils.get_loaders(db, config["task"]["batch_size"], train_inds, test_inds)
+
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     its = iter(train_loader)
     batch = next(its)
+    batch = batch.to(device)
+    metadata = batch.metadata()
 
-    model, optimizer = utils.get_model_v1(device, batch)
+    module = __import__(config["script"])
+    mdl = getattr(module, config["task"]["model"])
+    margs = config["task"]["model_args"]
+    model = mdl()
+    model = to_hetero(model, metadata, **margs).to(device)
+
+    opt = getattr(optim, config["task"]["optimizer"])
+    oargs = config["task"]["optimizer_args"]
+    optimizer = opt(model.parameters(), **oargs)
+
+    out = model(batch.x_dict, batch.edge_index_dict, batch.batch_dict)
 
     writer = SummaryWriter(str(pathlib.Path(__file__).parent.parent.resolve()) + "/runs/" + str(datetime.datetime.now()))
 
@@ -192,12 +209,12 @@ def train_test_loop():
                 btch = btch.to(device, non_blocking=True)
                 optimizer.zero_grad()
                 out = model(btch.x_dict, btch.edge_index_dict, btch.batch_dict)
-                loss = F.cross_entropy(out, btch["person"].y.long().view(-1))
+                loss = F.cross_entropy(out, btch[target_entity].y.long().view(-1))
                 loss.backward()
                 optimizer.step()
                 preds.extend(torch.argmax(torch.softmax(out, dim=-1), dim=-1).detach().tolist())
-                ytrue.extend(btch["person"].y.tolist())
-                all_loss += loss.item() / len(btch["person"].y.tolist())
+                ytrue.extend(btch[target_entity].y.tolist())
+                all_loss += loss.item() / len(btch[target_entity].y.tolist())
             except:
                 pass
         acc = accuracy_score(ytrue, preds)
@@ -219,10 +236,10 @@ def train_test_loop():
             try:
                 btch = btch.to(device, non_blocking=True)
                 out = model(btch.x_dict, btch.edge_index_dict, btch.batch_dict)
-                loss = F.cross_entropy(out, btch["person"].y.long().view(-1))
+                loss = F.cross_entropy(out, btch[target_entity].y.long().view(-1))
                 preds.extend(torch.argmax(torch.softmax(out, dim=-1), dim=-1).detach().tolist())
-                ytrue.extend(btch["person"].y.tolist())
-                all_loss += loss.item() / len(btch["person"].y.tolist())
+                ytrue.extend(btch[target_entity].y.tolist())
+                all_loss += loss.item() / len(btch[target_entity].y.tolist())
             except:
                 pass
         acc = accuracy_score(ytrue, preds)
@@ -238,7 +255,7 @@ def train_test_loop():
         train(i)
         test(i)
     
-    torch.save(model.state_dict(), str(pathlib.Path(__file__).parent.parent.resolve()) + "/models/checkpoint.pt")
+    torch.save(model.state_dict(), config["task"]["model_checkpoints"])
 
 
 @app.command()

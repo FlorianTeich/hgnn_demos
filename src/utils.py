@@ -9,8 +9,6 @@ import torch_geometric.transforms as T
 from torch.utils.tensorboard import SummaryWriter
 from torch_geometric.data import Batch, Dataset
 from torch_geometric.loader import NeighborLoader
-from torch_geometric.nn import (MLP, BatchNorm, GraphConv, MultiAggregation,
-                                SAGEConv, to_hetero)
 from torch_geometric.nn import (MLP, BatchNorm, LayerNorm, GraphConv, MultiAggregation,
                                     SAGEConv, to_hetero)
 from torch import Tensor

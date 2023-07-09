@@ -2,13 +2,14 @@ project: demo
 data_dir: ./data
 backend:
   uri: ./data/demo
-script: demo_utils # TODO: not working yet
+script: demo_utils
 nodes:
   - name: person
     file: ./data/persons.parquet
     key: PID
     label: label
     features: features
+    mode: mode
   - name: drug
     file: ./data/drugs.parquet
     key: PID
@@ -28,3 +29,16 @@ edges:
     from: drug
     to: person
     transform: edges_drugs
+task:
+  target_entity: person
+  train_inds: ./data/train_ids.parquet
+  test_inds: ./data/test_ids.parquet
+  model: GraphLevelGNN
+  model_args:
+    aggr: "max"
+    debug: True
+  batch_size: 32
+  optimizer: Adam
+  optimizer_args:
+    lr: 0.01
+  model_checkpoints: ./models/checkpoint.pt
