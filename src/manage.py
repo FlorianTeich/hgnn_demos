@@ -35,8 +35,17 @@ from torch_geometric.nn import (MLP, BatchNorm, GraphConv, MultiAggregation,
 from tqdm import tqdm
 import artificial_data
 import pathlib
+import yaml
+from yaml.loader import SafeLoader
+
 
 app = typer.Typer()
+
+def load_yaml(path='../default.yml'):
+    with open(path) as f:
+        data = yaml.load(f, Loader=SafeLoader)
+        #print(data)
+    return data
 
 @app.command()
 def generate_toy_data():
@@ -56,11 +65,11 @@ def generate_toy_data():
     persons.loc[test.index, "mode"] = "test"
 
     # Create Short Codes
-    diagnosis_data["diagnosis_short"] = diagnosis_data["DiagnosisCode"].str[:1]
-    drug_data["drug_short"] = drug_data["DrugCode"].str[:1]
+    #diagnosis_data["diagnosis_short"] = diagnosis_data["DiagnosisCode"].str[:1]
+    #drug_data["drug_short"] = drug_data["DrugCode"].str[:1]
 
     scaler2 = StandardScaler()
-    diagnosis_data = pd.read_sql_table("diagnoses", con=backend)
+    #diagnosis_data = pd.read_sql_table("diagnoses", con=backend)
 
     # Get gender and age
     le = preprocessing.LabelEncoder()
@@ -136,26 +145,25 @@ def generate_toy_data():
 
 
 @app.command()
-def migrate_data_to_kuzu():
+def migrate_data_to_kuzu(yamlfile="default.yml"):
     """Migrate Data to Kuzu"""
-    db = kuzu.Database(str(pathlib.Path(__file__).parent.parent.resolve()) + "/data/demo")
+    # TODO: Report progress
+    config = load_yaml(yamlfile)
+    db = kuzu.Database(config["backend"]["uri"])
     conn = kuzu.Connection(db, num_threads=cpu_count())
-    persons = pd.read_parquet(str(pathlib.Path(__file__).parent.parent.resolve()) + "/data/persons.parquet")
-    diagnosis_data = pd.read_parquet(str(pathlib.Path(__file__).parent.parent.resolve()) + "/data/diagnoses.parquet")
-    drug_data = pd.read_parquet(str(pathlib.Path(__file__).parent.parent.resolve()) + "/data/drugs.parquet")
 
-    utils.kuzu_node_table_from_arrays(conn, tablename="drug", feats=np.stack(drug_data["features"].values),
-                        labels=drug_data["label_a"].values)
-
-    utils.kuzu_node_table_from_arrays(conn, tablename="diagnosis", feats=np.stack(diagnosis_data["features"].values),
-                                labels=diagnosis_data["label_i"].values)
-
-    utils.kuzu_node_table_from_arrays(conn, tablename="person", feats=np.stack(persons["features"].values),
-                                labels=persons["label"].values)
-
-    utils.kuzu_edges_from_tensor(conn, np.flip(persons.merge(diagnosis_data, on="PID", how="inner")[["index_x", "index_y"]].values.T), "assigned_to", "diagnosis", "person")
-    utils.kuzu_edges_from_tensor(conn, np.flip(persons.merge(drug_data, on="PID", how="inner")[["index_x", "index_y"]].values.T), "consumed_by", "drug", "person")
-
+    for nodetype in config["nodes"]:
+        nodedata = pd.read_parquet(nodetype["file"])
+        utils.kuzu_node_table_from_arrays(conn, tablename=nodetype["name"], feats=np.stack(nodedata[nodetype["features"]].values),
+                        labels=nodedata[nodetype["label"]].values)
+    
+    module = __import__(config["script"])
+    
+    for edgetype in config["edges"]:
+        func = getattr(module, edgetype["transform"])
+        edges = func()
+        utils.kuzu_edges_from_tensor(conn, edges, edgetype["name"], edgetype["from"], edgetype["to"])
+    
 
 @app.command()
 def train_test_loop():

@@ -1,0 +1,30 @@
+project: demo
+data_dir: ./data
+backend:
+  uri: ./data/demo
+script: demo_utils # TODO: not working yet
+nodes:
+  - name: person
+    file: ./data/persons.parquet
+    key: PID
+    label: label
+    features: features
+  - name: drug
+    file: ./data/drugs.parquet
+    key: PID
+    label: label_a
+    features: features
+  - name: diagnosis
+    file: ./data/diagnoses.parquet
+    key: PID
+    label: label_i
+    features: features
+edges:
+  - name: assigned_to
+    from: diagnosis
+    to: person
+    transform: edges_diagnosis
+  - name: consumed_by
+    from: drug
+    to: person
+    transform: edges_drugs
