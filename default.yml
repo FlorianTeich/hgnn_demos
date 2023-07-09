@@ -35,6 +35,9 @@ task:
   test_inds: ./data/test_ids.parquet
   model: GraphLevelGNN
   model_args:
+    hidden_size: 32
+    num_classes: 2
+  heteromodel_args:
     aggr: "max"
     debug: True
   batch_size: 32

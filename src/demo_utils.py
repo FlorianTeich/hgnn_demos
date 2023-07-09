@@ -1,9 +1,10 @@
 import numpy as np
 import pandas as pd
-from torch import Tensor
 import torch
 import torch.nn.functional as F
-from torch_geometric.nn import (MultiAggregation, SAGEConv, Linear)
+from torch import Tensor
+from torch_geometric.nn import Linear, MultiAggregation, SAGEConv
+
 
 def edges_diagnosis():
     persons = pd.read_parquet("./data/persons.parquet")
@@ -12,7 +13,7 @@ def edges_diagnosis():
 
 def edges_drugs():
     persons = pd.read_parquet("./data/persons.parquet")
-    drugs_data = pd.read_parquet("./data/diagnoses.parquet")
+    drugs_data = pd.read_parquet("./data/drugs.parquet")
     return np.flip(persons.merge(drugs_data, on="PID", how="inner")[["index_x", "index_y"]].values.T)
 
 

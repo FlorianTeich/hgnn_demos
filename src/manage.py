@@ -1,44 +1,26 @@
-import typer
-
 import datetime
 import multiprocessing as mp
-import os.path as osp
-import string
-import urllib
+import pathlib
 from multiprocessing import cpu_count
 from os import path
-import utils
-import click
+
 import kuzu
 import numpy as np
 import pandas as pd
-import sqlalchemy
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
-import torch_geometric.transforms as T
-from sentence_transformers import SentenceTransformer
-from sklearn import preprocessing
-from sklearn.ensemble import GradientBoostingClassifier
-from sklearn.feature_extraction.text import CountVectorizer
-from sklearn.metrics import accuracy_score
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import MaxAbsScaler, StandardScaler
-from sqlalchemy import create_engine
-from torch import Tensor
-from torch.nn import Linear
-from torch.utils.tensorboard import SummaryWriter
-from torch_geometric.data import Batch, Dataset
-from torch_geometric.loader import NeighborLoader
-from torch_geometric.nn import (MLP, BatchNorm, GraphConv, MultiAggregation,
-                                SAGEConv, to_hetero)
-from tqdm import tqdm
-import artificial_data
-import pathlib
+import typer
 import yaml
-from yaml.loader import SafeLoader
 from rich import print
+from sklearn.metrics import accuracy_score
 from torch import optim
+from torch.utils.tensorboard import SummaryWriter
+from torch_geometric.nn import to_hetero
+from tqdm import tqdm
+from yaml.loader import SafeLoader
+
+import artificial_data
+import utils
 
 app = typer.Typer()
 
@@ -49,99 +31,9 @@ def load_yaml(path='../default.yml'):
     return data
 
 @app.command()
-def generate_toy_data():
+def generate_toy_data(num_samples: int=1000):
     """Generate toy data"""
-    NUM_SAMPLES=1000
-    sqlite_file_path = str(pathlib.Path(__file__).parent.parent.resolve()) + "/data/backend.db"
-    print(sqlite_file_path)
-    backend = create_engine("sqlite:///" + sqlite_file_path)
-    artificial_data.generate_all_tables(person_count=NUM_SAMPLES, conn=backend)
-    persons = pd.read_sql_table("persons", con=backend)
-    diagnosis_data = pd.read_sql_table("diagnoses", con=backend)
-    drug_data = pd.read_sql_table("drugs", con=backend)
-
-    train, validate, test = np.split(persons.sample(frac=1), [int(.6*len(persons)), int(.8*len(persons))])
-    persons.loc[train.index, "mode"] = "train"
-    persons.loc[validate.index, "mode"] = "validate"
-    persons.loc[test.index, "mode"] = "test"
-
-    # Get gender and age
-    scaler2 = StandardScaler()
-    le = preprocessing.LabelEncoder()
-    le.fit(persons[persons["mode"] != "test"].Gender)
-    persons["gender_encoded"] = le.fit_transform(persons.Gender)
-
-    persons["now"] = pd.to_datetime(datetime.datetime.now())
-    persons["age"] = (persons.now - persons.Birthday).dt.days
-    persons["age"] = scaler2.fit_transform(np.expand_dims(pd.to_numeric(persons["age"], downcast="float"), 1))
-
-    # Get diagnosis codes
-    scaler = MaxAbsScaler()
-    diagnosis_data = diagnosis_data.merge(persons[["PID", "Birthday", "mode"]], on="PID", how="left")
-    diagnosis_data["diagnosis_age"] = (diagnosis_data["DiagnosisDate"] - diagnosis_data.Birthday).dt.days
-    scaler.fit(diagnosis_data[diagnosis_data["mode"] != "test"][["diagnosis_age"]])
-    diagnosis_data["diagnosis_age"] = scaler.transform(diagnosis_data[["diagnosis_age"]])
-    diagnosis_data["diagnosis_short"] = diagnosis_data["DiagnosisCode"].str[:1].apply(str.lower)
-    diagnosis_agg = diagnosis_data.groupby("PID")['diagnosis_short'].apply(" ".join)
-
-    merged_diagnosis = persons.merge(diagnosis_agg, how="left", on="PID")
-
-    # Get drug codes
-    scaler2 = MaxAbsScaler()
-    drug_data = drug_data.merge(persons[["PID", "Birthday", "mode"]], on="PID", how="left")
-    drug_data["drug_age"] = (drug_data["DrugDate"] - drug_data.Birthday).dt.days
-    scaler2.fit(drug_data[drug_data["mode"] != "test"][["drug_age"]])
-    drug_data["drug_age"] = scaler2.transform(drug_data[["drug_age"]])
-    drug_data["drug_short"] = drug_data["DrugCode"].str[:1].apply(str.lower)
-    drug_agg = drug_data.groupby("PID")['drug_short'].apply(" ".join)
-
-    merged_drug = persons.merge(drug_agg, how="left", on="PID")
-
-    def analyzer_custom(doc):
-        return doc.split()
-
-    vectorizer_diagnosis = CountVectorizer(vocabulary=list(string.ascii_lowercase),
-                                analyzer=analyzer_custom)
-    vectorizer_drug = CountVectorizer(vocabulary=list(string.ascii_lowercase),
-                                analyzer=analyzer_custom)
-
-    data_diagnosis = vectorizer_diagnosis.transform(merged_diagnosis["diagnosis_short"].values.astype('U')).todense()
-    data_drug = vectorizer_drug.transform(merged_drug["drug_short"].values.astype('U')).todense()
-    merged_diagnosis.loc[:, "diagnosis_vec"] = data_diagnosis.tolist()
-    merged_drug.loc[:, "drug_vec"] = data_drug.tolist()
-
-    X = np.hstack([merged_diagnosis[["gender_encoded", "age"]].values, 
-                np.vstack(merged_diagnosis["diagnosis_vec"].values),
-                np.vstack(merged_drug["drug_vec"].values)])
-
-    # Create Target Labels
-    diagnosis_data["label_i"] = ((diagnosis_data["diagnosis_short"] <= "k") & (diagnosis_data["diagnosis_age"] < 0))
-    drug_data["label_a"] = ((drug_data["drug_short"] <= "k") & (drug_data["drug_age"] > 0))
-    persons = persons.merge(diagnosis_data[["PID", "label_i"]].groupby("PID").max(), on="PID", how="left")
-    persons = persons.merge(drug_data[["PID", "label_a"]].groupby("PID").max(), on="PID", how="left")
-    persons["label"] = (persons["label_i"] == True) & (persons["label_a"] == True)
-    print(persons.label.value_counts())
-
-    data = np.hstack([utils.encode_strings(diagnosis_data["diagnosis_short"]), diagnosis_data[["diagnosis_age"]].values])
-    feats = pd.DataFrame(((x,) for x in data), columns=["features"])
-    diagnosis_data = pd.concat([diagnosis_data, feats], axis=1)
-
-    data = np.hstack([utils.encode_strings(drug_data["drug_short"]), drug_data[["drug_age"]].values])
-    feats = pd.DataFrame(((x,) for x in data), columns=["features"])
-    drug_data = pd.concat([drug_data, feats], axis=1)
-
-    data = persons[["age", "gender_encoded"]].values
-    feats = pd.DataFrame(((x,) for x in data), columns=["features"])
-    persons = pd.concat([persons, feats], axis=1)
-
-    persons.to_parquet(str(pathlib.Path(__file__).parent.parent.resolve()) + "/data/persons.parquet")
-    diagnosis_data.to_parquet(str(pathlib.Path(__file__).parent.parent.resolve()) + "/data/diagnoses.parquet")
-    drug_data.to_parquet(str(pathlib.Path(__file__).parent.parent.resolve()) + "/data/drugs.parquet")
-
-    train_inds = pd.DataFrame({"ids": persons[persons["mode"] == "train"].index.tolist()})
-    test_inds = pd.DataFrame({"ids": persons[persons["mode"] == "test"].index.tolist()})
-    train_inds.to_parquet(str(pathlib.Path(__file__).parent.parent.resolve()) + "/data/train_ids.parquet")
-    test_inds.to_parquet(str(pathlib.Path(__file__).parent.parent.resolve()) + "/data/test_ids.parquet")
+    artificial_data.generate_toy_datasamples(num_samples)
 
 
 @app.command()
@@ -176,7 +68,7 @@ def train_test_loop(yamlfile="default.yml"):
     train_inds = torch.tensor(pd.read_parquet(config["task"]["train_inds"])["ids"].values, dtype=torch.long)
     test_inds = torch.tensor(pd.read_parquet(config["task"]["test_inds"])["ids"].values, dtype=torch.long)
     
-    train_loader, test_loader = utils.get_loaders(db, config["task"]["batch_size"], train_inds, test_inds)
+    train_loader, test_loader = utils.get_loaders(db, config["task"]["batch_size"], train_inds, test_inds, config["task"]["target_entity"])
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -188,8 +80,9 @@ def train_test_loop(yamlfile="default.yml"):
     module = __import__(config["script"])
     mdl = getattr(module, config["task"]["model"])
     margs = config["task"]["model_args"]
-    model = mdl()
-    model = to_hetero(model, metadata, **margs).to(device)
+    hmargs = config["task"]["heteromodel_args"]
+    model = mdl(**margs)
+    model = to_hetero(model, metadata, **hmargs).to(device)
 
     opt = getattr(optim, config["task"]["optimizer"])
     oargs = config["task"]["optimizer_args"]
@@ -288,21 +181,19 @@ def prepare_transformer_benchmark():
 @app.command()
 def benchmark_transformer():
     """Train a Transformer model on the toy data"""
-    import torch
-    from tqdm.auto import tqdm
-    from torch.utils.data import DataLoader
-    from transformers import AutoModelForSequenceClassification
-    from transformers import AutoTokenizer, DistilBertConfig
-    from torch.utils.data import Dataset
-    from torch.nn import functional as F
-    from tqdm import tqdm
-    import numpy as np
     import itertools
+
     import matplotlib.pyplot as plt
+    import numpy as np
     import pandas as pd
-    from datasets import load_metric
+    import torch
+    from datasets import Dataset, load_dataset, load_from_disk, load_metric
     from torch.nn import functional as F
-    from datasets import Dataset, load_dataset, load_from_disk
+    from torch.utils.data import DataLoader, Dataset
+    from tqdm import tqdm
+    from tqdm.auto import tqdm
+    from transformers import (AutoModelForSequenceClassification,
+                              AutoTokenizer, DistilBertConfig)
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
