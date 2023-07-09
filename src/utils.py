@@ -1,6 +1,7 @@
 import pathlib
 from multiprocessing import cpu_count
-
+import yaml
+from yaml.loader import SafeLoader
 import numpy as np
 import torch
 import torch_geometric.transforms as T
@@ -16,8 +17,14 @@ def encode_strings(df):
     x = model_string_encoder.encode(df.values, show_progress_bar=True)
     return x
 
+def load_yaml(path='../default.yml'):
+    with open(path) as f:
+        data = yaml.load(f, Loader=SafeLoader)
+        #print(data)
+    return data
+
 def get_loaders(db, LOADER_BATCH_SIZE, train_inds, test_inds, target_entity):
-    feature_store, graph_store = db.get_torch_geometric_remote_backend(cpu_count)
+    feature_store, graph_store = db.get_torch_geometric_remote_backend(4)
 
     transform = T.Compose([T.ToUndirected(), T.AddSelfLoops()
                         ])
@@ -29,7 +36,7 @@ def get_loaders(db, LOADER_BATCH_SIZE, train_inds, test_inds, target_entity):
         input_nodes=(target_entity, train_inds),
         transform=transform,
         disjoint=True,
-        num_workers=cpu_count,
+        num_workers=4,
         shuffle=True,
         pin_memory=True,
         filter_per_worker=False,
@@ -42,7 +49,7 @@ def get_loaders(db, LOADER_BATCH_SIZE, train_inds, test_inds, target_entity):
         input_nodes=(target_entity, test_inds),
         transform=transform,
         disjoint=True,
-        num_workers=cpu_count,
+        num_workers=4,
         pin_memory=True,
         filter_per_worker=False,
     )

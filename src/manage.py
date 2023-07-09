@@ -10,28 +10,21 @@ import pandas as pd
 import torch
 import torch.nn.functional as F
 import typer
-import yaml
 from rich import print
 from sklearn.metrics import accuracy_score
 from torch import optim
 from torch.utils.tensorboard import SummaryWriter
 from torch_geometric.nn import to_hetero
 from tqdm import tqdm
-from yaml.loader import SafeLoader
 
 import artificial_data
 import utils
+from utils import load_yaml
 
 app = typer.Typer()
 
-def load_yaml(path='../default.yml'):
-    with open(path) as f:
-        data = yaml.load(f, Loader=SafeLoader)
-        #print(data)
-    return data
-
 @app.command()
-def generate_toy_data(num_samples: int=1000):
+def generate_toy_data(num_samples: int=50000):
     """Generate toy data"""
     artificial_data.generate_toy_datasamples(num_samples)
 
@@ -144,7 +137,7 @@ def train_test_loop(yamlfile="default.yml"):
         preds = []
         ytrue = []
 
-    for i in tqdm(range(1)):
+    for i in tqdm(range(5)):
         train(i)
         test(i)
     

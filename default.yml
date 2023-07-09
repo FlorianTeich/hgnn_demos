@@ -6,18 +6,18 @@ script: demo_utils
 nodes:
   - name: person
     file: ./data/persons.parquet
-    key: PID
+    key: label
     label: label
     features: features
     mode: mode
   - name: drug
     file: ./data/drugs.parquet
-    key: PID
+    key: label_a
     label: label_a
     features: features
   - name: diagnosis
     file: ./data/diagnoses.parquet
-    key: PID
+    key: label_i
     label: label_i
     features: features
 edges:
