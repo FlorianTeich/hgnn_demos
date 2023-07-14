@@ -31,3 +31,46 @@ class GraphLevelGNN(torch.nn.Module):
         x = self.pool(x, batch)
         x = self.lin(x)
         return x
+
+class GraphLevelGNN_Generic(torch.nn.Module):
+    def __init__(self, hidden_size=32, num_classes=2, convtype=SAGEConv, act=F.gelu,
+                 bn=torch.nn.BatchNorm1d, do=None):
+        super().__init__()
+        self.do = do
+        self.act = act
+        self.bn1 = bn(hidden_size)
+        #self.bn2 = bn(hidden_size)
+        #self.bn3 = bn(hidden_size)
+        self.conv1 = convtype(-1, hidden_size)
+        self.conv2 = convtype(hidden_size, hidden_size)
+        #self.conv3 = convtype(hidden_size, hidden_size)
+        #self.conv4 = convtype(hidden_size, hidden_size)
+
+        self.pool = MultiAggregation(
+            aggrs=['mean', 'min', 'max'],
+            mode="cat"
+            )
+        #self.lin = Linear(hidden_size*3, num_classes)
+        self.lin = Linear(-1, num_classes)
+
+    def forward(self, x: Tensor, edge_index: Tensor, batch: Tensor=None) -> Tensor:
+        #if self.bn1:
+        #    x = self.bn1(x)
+        x = self.act(x)
+        if self.do:
+            x = F.dropout(p=self.do, training=self.training)
+        x = self.conv1(x, edge_index)
+
+        h = x
+        if self.bn1:
+            h = self.bn1(h)
+        h = self.act(h)
+        if self.do:
+            h = F.dropout(p=self.do, training=self.training)
+        h = self.conv2(h, edge_index)
+        x = x + h
+
+        x = self.pool(x, batch)
+
+        x = self.lin(x)
+        return x

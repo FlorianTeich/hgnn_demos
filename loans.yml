@@ -24,7 +24,7 @@ task:
   target_entity: loan
   train_inds: ./data/train_loan_ids.parquet
   test_inds: ./data/test_loan_ids.parquet
-  model: GraphLevelGNN
+  model: GraphLevelGNN_Generic
   model_args:
     hidden_size: 32
     num_classes: 2
@@ -34,5 +34,5 @@ task:
   batch_size: 32
   optimizer: Adam
   optimizer_args:
-    lr: 0.01
+    lr: 0.0001
   model_checkpoints: ./models/checkpoint_loan.pt
