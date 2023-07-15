@@ -29,6 +29,8 @@ rich = "==13.4.2"
 captum = "==0.6.0"
 mlflow = "==2.4.2"
 mariadb = "==1.1.7"
+dill = "==0.3.6"
+humanhash3 = "==0.0.6"
 
 [dev-packages]
 

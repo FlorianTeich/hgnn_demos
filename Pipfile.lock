@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "f0f35dbec59e865e2bb4792460380636587b6dc5fb7755f3cf43459b484529e2"
+            "sha256": "21d182dbed622fe18a4d33d73842181813cc2d21e0cf2522f0d5ff689133c52b"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -571,7 +571,7 @@
                 "sha256:a07ffd2351b8c678dfc4a856a3005f8067aea51d6ba6c700796a4d9e280f39f0",
                 "sha256:e5db55f3687856d8fbdab002ed78544e1c4559a130302693d839dfe8f93f2373"
             ],
-            "markers": "python_version >= '3.7'",
+            "index": "pypi",
             "version": "==0.3.6"
         },
         "docker": {
@@ -925,6 +925,13 @@
             ],
             "markers": "python_full_version >= '3.7.0'",
             "version": "==0.16.4"
+        },
+        "humanhash3": {
+            "hashes": [
+                "sha256:89ae15f6034bdb07e53ac2b2e246cc7131940766d2b2b70b7398dd27c640b1ab"
+            ],
+            "index": "pypi",
+            "version": "==0.0.6"
         },
         "idna": {
             "hashes": [
