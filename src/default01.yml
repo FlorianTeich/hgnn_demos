@@ -1,0 +1,115 @@
+edges:
+- from: account
+  from_col: district_id
+  name: account_client
+  to: client
+  to_col: district_id
+  transform: ''
+- from: account
+  from_col: account_id
+  name: account_disp
+  to: disp
+  to_col: account_id
+  transform: ''
+- from: account
+  from_col: district_id
+  name: account_district
+  to: district
+  to_col: district_id
+  transform: ''
+- from: account
+  from_col: account_id
+  name: account_trans
+  to: trans
+  to_col: account_id
+  transform: ''
+- from: client
+  from_col: client_id
+  name: client_disp
+  to: disp
+  to_col: client_id
+  transform: ''
+- from: client
+  from_col: district_id
+  name: client_district
+  to: district
+  to_col: district_id
+  transform: ''
+- from: disp
+  from_col: account_id
+  name: disp_trans
+  to: trans
+  to_col: account_id
+  transform: ''
+nodes:
+  account:
+    transform:
+      account_id: proc_raw
+      date: proc_datetime
+      district_id: proc_objects_one_hot
+      frequency: proc_objects_one_hot
+  card:
+    transform:
+      card_id: proc_raw
+      disp_id: proc_raw
+      issued: proc_datetime
+      type: proc_objects_one_hot
+  client:
+    transform:
+      birth_date: proc_datetime
+      client_id: proc_raw
+      district_id: proc_objects_one_hot
+      gender: proc_objects_one_hot
+  disp:
+    transform:
+      account_id: proc_raw
+      client_id: proc_raw
+      disp_id: proc_raw
+      type: proc_objects_one_hot
+  district:
+    transform:
+      A10: proc_raw
+      A11: proc_raw
+      A12: proc_raw
+      A13: proc_raw
+      A14: proc_raw
+      A15: proc_raw
+      A16: proc_raw
+      A2: proc_objects_string
+      A3: proc_objects_one_hot
+      A4: proc_raw
+      A5: proc_raw
+      A6: proc_raw
+      A7: proc_raw
+      A8: proc_objects_one_hot
+      A9: proc_objects_one_hot
+      district_id: proc_raw
+  loan:
+    transform:
+      account_id: proc_raw
+      amount: proc_raw
+      date: proc_datetime
+      duration: proc_objects_one_hot
+      loan_id: proc_raw
+      payments: proc_raw
+      status: proc_objects_one_hot
+  order:
+    transform:
+      account_id: proc_raw
+      account_to: proc_raw
+      amount: proc_raw
+      bank_to: proc_objects_one_hot
+      k_symbol: proc_objects_one_hot
+      order_id: proc_raw
+  trans:
+    transform:
+      account: proc_raw
+      account_id: proc_raw
+      amount: proc_raw
+      balance: proc_raw
+      bank: proc_objects_one_hot
+      date: proc_datetime
+      k_symbol: proc_objects_one_hot
+      operation: proc_objects_one_hot
+      trans_id: proc_raw
+      type: proc_objects_one_hot
