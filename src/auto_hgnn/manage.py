@@ -33,21 +33,28 @@ def generate_toy_data(num_samples: int=50000):
 def migrate_data_to_kuzu(yamlfile="default.yml"):
     """Migrate Data to Kuzu"""
     # TODO: Report progress
+    import os
+    import sys
     config = load_yaml(yamlfile)
     db = kuzu.Database(config["backend"]["uri"])
     conn = kuzu.Connection(db, num_threads=cpu_count())
 
     for nodetype in config["nodes"]:
         nodedata = pd.read_parquet(nodetype["file"])
-        utils.kuzu_node_table_from_arrays(conn, tablename=nodetype["name"], feats=np.stack(nodedata[nodetype["features"]].values),
-                        labels=nodedata[nodetype["label"]].values)
+        utils.kuzu_node_table_from_arrays(conn,
+                                          tablename=nodetype["name"],
+                                          feats=np.stack(nodedata[nodetype["features"]].values),
+                                          labels=nodedata[nodetype["label"]].values,
+                                          path=config["data_dir"])
     
-    module = __import__(config["script"])
+    sys.path.append(os.path.abspath(yamlfile[:yamlfile.rfind("/") + 1] + config["script"][:(config["script"].rfind("/") + 1)]))
+    module = __import__(config["script"][(config["script"].rfind("/") + 1):])
     
     for edgetype in config["edges"]:
         func = getattr(module, edgetype["transform"])
         edges = func()
-        utils.kuzu_edges_from_tensor(conn, edges, edgetype["name"], edgetype["from"], edgetype["to"])
+        utils.kuzu_edges_from_tensor(conn, edges, edgetype["name"], edgetype["from"], edgetype["to"],
+                                     path=config["data_dir"])
     
 
 @app.command()
