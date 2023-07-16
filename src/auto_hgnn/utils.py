@@ -79,9 +79,9 @@ def copy_edges_to_kuzu(conn, relationshipname="cites", edge_file="edge_index.csv
 def kuzu_node_table_from_arrays(conn, tablename="paper", feats=None, labels=None,
                     path="./data/"):
     # Create csvs and npy files from df
-    ids_path = path + tablename + "_ids.npy"
-    node_feature_path = path + tablename + "_node_features.npy"
-    node_label_path = path + tablename + "_node_labels.npy"
+    ids_path = path + "/" + tablename + "_ids.npy"
+    node_feature_path = path + "/" + tablename + "_node_features.npy"
+    node_label_path = path + "/" + tablename + "_node_labels.npy"
     ids = np.arange(feats.shape[0])
     np.save(ids_path, ids)
 
@@ -103,7 +103,7 @@ def kuzu_node_table_from_arrays(conn, tablename="paper", feats=None, labels=None
 def kuzu_edges_from_tensor(conn, edge_index, relationshipname, from_, to_,
                            path=str(pathlib.Path(__file__).parent.parent.resolve()) + "/data/"):
     # Create csv file
-    csv_path = path + relationshipname + "_edge_index.csv"
+    csv_path = path + "/" + relationshipname + "_edge_index.csv"
     csvfile = open(csv_path, 'w')
     for i in tqdm(range(edge_index.shape[1])):
         csvfile.write(str(edge_index[0, i]) + ',' + str(edge_index[1, i]) + '\n')

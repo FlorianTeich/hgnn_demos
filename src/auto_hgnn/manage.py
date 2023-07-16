@@ -45,7 +45,7 @@ def migrate_data_to_kuzu(yamlfile="default.yml"):
                                           tablename=nodetype["name"],
                                           feats=np.stack(nodedata[nodetype["features"]].values),
                                           labels=nodedata[nodetype["label"]].values,
-                                          path=config["data_dir"])
+                                          path=os.path.abspath(yamlfile[:yamlfile.rfind("/") + 1] + config["data_dir"] + "/"))
     
     sys.path.append(os.path.abspath(yamlfile[:yamlfile.rfind("/") + 1] + config["script"][:(config["script"].rfind("/") + 1)]))
     module = __import__(config["script"][(config["script"].rfind("/") + 1):])
@@ -54,7 +54,7 @@ def migrate_data_to_kuzu(yamlfile="default.yml"):
         func = getattr(module, edgetype["transform"])
         edges = func()
         utils.kuzu_edges_from_tensor(conn, edges, edgetype["name"], edgetype["from"], edgetype["to"],
-                                     path=config["data_dir"])
+                                     path=os.path.abspath(yamlfile[:yamlfile.rfind("/") + 1] + config["data_dir"] + "/"))
     
 
 @app.command()
