@@ -1,22 +1,22 @@
 project: demo
-data_dir: ./data
+data_dir: ../data
 backend:
-  uri: ./data/demo
-script: demo_utils
+  uri: ../data/demo
+script: ../scripts/demo_utils
 nodes:
   - name: person
-    file: ./data/persons.parquet
+    file: ../data/persons.parquet
     key: label
     label: label
     features: features
     mode: mode
   - name: drug
-    file: ./data/drugs.parquet
+    file: ../data/drugs.parquet
     key: label_a
     label: label_a
     features: features
   - name: diagnosis
-    file: ./data/diagnoses.parquet
+    file: ../data/diagnoses.parquet
     key: label_i
     label: label_i
     features: features
@@ -31,8 +31,8 @@ edges:
     transform: edges_drugs
 task:
   target_entity: person
-  train_inds: ./data/train_ids.parquet
-  test_inds: ./data/test_ids.parquet
+  train_inds: ../data/train_ids.parquet
+  test_inds: ../data/test_ids.parquet
   model: GraphLevelGNN
   model_args:
     hidden_size: 32
@@ -44,4 +44,4 @@ task:
   optimizer: Adam
   optimizer_args:
     lr: 0.01
-  model_checkpoints: ./models/checkpoint.pt
+  model_checkpoints: ../models/checkpoint.pt

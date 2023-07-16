@@ -165,8 +165,8 @@ def generate_all_tables(
     )
     diagnoses.to_sql("diagnoses", connection_session, if_exists="replace")
 
-def generate_toy_datasamples(num_samples=1000):
-    sqlite_file_path = str(pathlib.Path(__file__).parent.parent.resolve()) + "/data/backend.db"
+def generate_toy_datasamples(num_samples=1000, exportpath="./"):
+    sqlite_file_path = str(exportpath) + "/backend.db"
     print(sqlite_file_path)
     backend = create_engine("sqlite:///" + sqlite_file_path)
     generate_all_tables(person_count=num_samples, conn=backend)
@@ -248,11 +248,11 @@ def generate_toy_datasamples(num_samples=1000):
     feats = pd.DataFrame(((x,) for x in data), columns=["features"])
     persons = pd.concat([persons, feats], axis=1)
 
-    persons.to_parquet(str(pathlib.Path(__file__).parent.parent.resolve()) + "/data/persons.parquet")
-    diagnosis_data.to_parquet(str(pathlib.Path(__file__).parent.parent.resolve()) + "/data/diagnoses.parquet")
-    drug_data.to_parquet(str(pathlib.Path(__file__).parent.parent.resolve()) + "/data/drugs.parquet")
+    persons.to_parquet(str(exportpath) + "/persons.parquet")
+    diagnosis_data.to_parquet(str(exportpath) + "/diagnoses.parquet")
+    drug_data.to_parquet(str(exportpath) + "/drugs.parquet")
 
     train_inds = pd.DataFrame({"ids": persons[persons["mode"] == "train"].index.tolist()})
     test_inds = pd.DataFrame({"ids": persons[persons["mode"] == "test"].index.tolist()})
-    train_inds.to_parquet(str(pathlib.Path(__file__).parent.parent.resolve()) + "/data/train_ids.parquet")
-    test_inds.to_parquet(str(pathlib.Path(__file__).parent.parent.resolve()) + "/data/test_ids.parquet")
+    train_inds.to_parquet(str(exportpath) + "/train_ids.parquet")
+    test_inds.to_parquet(str(exportpath) + "/test_ids.parquet")

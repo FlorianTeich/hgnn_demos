@@ -10,6 +10,9 @@ data/
 runs/
 models/
 
+*.npy
+*.csv
+
 # Distribution / packaging
 .Python
 build/

@@ -77,7 +77,7 @@ def copy_edges_to_kuzu(conn, relationshipname="cites", edge_file="edge_index.csv
     conn.execute('COPY ' + relationshipname + ' FROM "%s";' % (edge_file))
 
 def kuzu_node_table_from_arrays(conn, tablename="paper", feats=None, labels=None,
-                    path=str(pathlib.Path(__file__).parent.parent.resolve()) + "/data/"):
+                    path="./data/"):
     # Create csvs and npy files from df
     ids_path = path + tablename + "_ids.npy"
     node_feature_path = path + tablename + "_node_features.npy"
