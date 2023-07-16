@@ -1,0 +1,22 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "auto_hgnn"
+version = "0.0.1"
+authors = [
+  { name="Florian Teich", email="florianteich@gmail.com" },
+]
+description = "Heterogeneous Graph Neural Network - Demoproject"
+readme = "README.md"
+requires-python = ">=3.10"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/FlorianTeich/hgnn_demos"
+"Bug Tracker" = "https://github.com/FlorianTeich/hgnn_demos/issues"

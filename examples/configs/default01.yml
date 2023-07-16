@@ -1,11 +1,17 @@
+project: basic
+data_dir: ./data
+backend:
+  uri: ./data/basic
 script: basic_utils
 nodes:
 - name: trans
   file: ./data/trans.parquet
+  key: trans_id
+  label: trans_id
   features: features
   transform:
-    trans_id: proc_raw
-    account_id: proc_raw
+    #trans_id: proc_raw
+    #account_id: proc_raw
     date: proc_datetime
     type: proc_objects_one_hot
     operation: proc_objects_one_hot
@@ -13,13 +19,15 @@ nodes:
     balance: proc_raw
     k_symbol: proc_objects_one_hot
     bank: proc_objects_one_hot
-    account: proc_raw
+    #account: proc_raw
 - name: loan
   file: ./data/loan.parquet
+  key: loan_id
   features: features
+  label: status
   transform:
-    loan_id: proc_raw
-    account_id: proc_raw
+    #loan_id: proc_raw
+    #account_id: proc_raw
     date: proc_datetime
     amount: proc_raw
     duration: proc_objects_one_hot
@@ -27,51 +35,63 @@ nodes:
     status: proc_objects_one_hot
 - name: order
   file: ./data/order.parquet
+  key: order_id
+  label: order_id
   features: features
   transform:
-    order_id: proc_raw
-    account_id: proc_raw
+    #order_id: proc_raw
+    #account_id: proc_raw
     bank_to: proc_objects_one_hot
-    account_to: proc_raw
+    #account_to: proc_raw
     amount: proc_raw
     k_symbol: proc_objects_one_hot
 - name: card
   file: ./data/card.parquet
+  key: card_id
+  label: card_id
   features: features
   transform:
-    card_id: proc_raw
-    disp_id: proc_raw
+    #card_id: proc_raw
+    #disp_id: proc_raw
     type: proc_objects_one_hot
     issued: proc_datetime
 - name: account
   file: ./data/account.parquet
+  key: account_id
+  label: account_id
   features: features
   transform:
-    account_id: proc_raw
+    #account_id: proc_raw
     district_id: proc_objects_one_hot
     frequency: proc_objects_one_hot
     date: proc_datetime
 - name: client
   file: ./data/client.parquet
+  key: client_id
+  label: client_id
   features: features
   transform:
-    client_id: proc_raw
+    #client_id: proc_raw
     gender: proc_objects_one_hot
     birth_date: proc_datetime
-    district_id: proc_objects_one_hot
+    #district_id: proc_objects_one_hot
 - name: disp
   file: ./data/disp.parquet
+  key: disp_id
+  label: disp_id
   features: features
   transform:
-    disp_id: proc_raw
-    client_id: proc_raw
-    account_id: proc_raw
+    #disp_id: proc_raw
+    #client_id: proc_raw
+    #account_id: proc_raw
     type: proc_objects_one_hot
 - name: district
   file: ./data/district.parquet
+  key: district_id
+  label: district_id
   features: features
   transform:
-    district_id: proc_raw
+    #district_id: proc_raw
     A2: proc_objects_string
     A3: proc_objects_one_hot
     A4: proc_raw
@@ -88,45 +108,9 @@ nodes:
     A15: proc_raw
     A16: proc_raw
 edges:
-- name: account_client
-  from: account
-  to: client
+- name: loan_account
+  from: loan
+  to: account
   transform: ''
-  from_col: district_id
-  to_col: district_id
-- name: account_disp
-  from: account
-  to: disp
-  transform: ''
-  from_col: account_id
-  to_col: account_id
-- name: account_district
-  from: account
-  to: district
-  transform: ''
-  from_col: district_id
-  to_col: district_id
-- name: account_trans
-  from: account
-  to: trans
-  transform: ''
-  from_col: account_id
-  to_col: account_id
-- name: client_disp
-  from: client
-  to: disp
-  transform: ''
-  from_col: client_id
-  to_col: client_id
-- name: client_district
-  from: client
-  to: district
-  transform: ''
-  from_col: district_id
-  to_col: district_id
-- name: disp_trans
-  from: disp
-  to: trans
-  transform: ''
-  from_col: account_id
+  from_col: loan_id
   to_col: account_id

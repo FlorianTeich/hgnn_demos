@@ -17,9 +17,9 @@ from torch.utils.tensorboard import SummaryWriter
 from torch_geometric.nn import to_hetero
 from tqdm import tqdm
 
-import artificial_data
-import utils
-from utils import load_yaml
+from . import artificial_data
+from . import utils
+from .utils import load_yaml
 
 app = typer.Typer()
 

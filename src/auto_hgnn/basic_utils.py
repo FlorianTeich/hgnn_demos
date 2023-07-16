@@ -82,3 +82,8 @@ def proc_datetime(data):
                     feature_tmp_day_of_week_y,
                     ]
     return np.vstack(feature_tmp).T
+
+
+def edges_trans():
+    data = pd.read_parquet("./data/edges_loan_account.parquet")
+    return np.flip(data[["loan_id", "account_id"]].values.T)

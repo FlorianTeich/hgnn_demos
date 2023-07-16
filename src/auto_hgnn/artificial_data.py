@@ -16,7 +16,7 @@ from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.preprocessing import MaxAbsScaler, StandardScaler
 from sqlalchemy import create_engine
 
-import utils
+from . import utils
 
 fake = Faker("en_US")
 
