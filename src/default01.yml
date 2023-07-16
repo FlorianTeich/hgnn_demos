@@ -1,75 +1,92 @@
+script: basic_utils
 nodes:
-  trans:
-    transform:
-      trans_id: proc_raw
-      account_id: proc_raw
-      date: proc_datetime
-      type: proc_objects_one_hot
-      operation: proc_objects_one_hot
-      amount: proc_raw
-      balance: proc_raw
-      k_symbol: proc_objects_one_hot
-      bank: proc_objects_one_hot
-      account: proc_raw
-  loan:
-    transform:
-      loan_id: proc_raw
-      account_id: proc_raw
-      date: proc_datetime
-      amount: proc_raw
-      duration: proc_objects_one_hot
-      payments: proc_raw
-      status: proc_objects_one_hot
-  order:
-    transform:
-      order_id: proc_raw
-      account_id: proc_raw
-      bank_to: proc_objects_one_hot
-      account_to: proc_raw
-      amount: proc_raw
-      k_symbol: proc_objects_one_hot
-  card:
-    transform:
-      card_id: proc_raw
-      disp_id: proc_raw
-      type: proc_objects_one_hot
-      issued: proc_datetime
-  account:
-    transform:
-      account_id: proc_raw
-      district_id: proc_objects_one_hot
-      frequency: proc_objects_one_hot
-      date: proc_datetime
-  client:
-    transform:
-      client_id: proc_raw
-      gender: proc_objects_one_hot
-      birth_date: proc_datetime
-      district_id: proc_objects_one_hot
-  disp:
-    transform:
-      disp_id: proc_raw
-      client_id: proc_raw
-      account_id: proc_raw
-      type: proc_objects_one_hot
-  district:
-    transform:
-      district_id: proc_raw
-      A2: proc_objects_string
-      A3: proc_objects_one_hot
-      A4: proc_raw
-      A5: proc_raw
-      A6: proc_raw
-      A7: proc_raw
-      A8: proc_objects_one_hot
-      A9: proc_objects_one_hot
-      A10: proc_raw
-      A11: proc_raw
-      A12: proc_raw
-      A13: proc_raw
-      A14: proc_raw
-      A15: proc_raw
-      A16: proc_raw
+- name: trans
+  file: ./data/trans.parquet
+  features: features
+  transform:
+    trans_id: proc_raw
+    account_id: proc_raw
+    date: proc_datetime
+    type: proc_objects_one_hot
+    operation: proc_objects_one_hot
+    amount: proc_raw
+    balance: proc_raw
+    k_symbol: proc_objects_one_hot
+    bank: proc_objects_one_hot
+    account: proc_raw
+- name: loan
+  file: ./data/loan.parquet
+  features: features
+  transform:
+    loan_id: proc_raw
+    account_id: proc_raw
+    date: proc_datetime
+    amount: proc_raw
+    duration: proc_objects_one_hot
+    payments: proc_raw
+    status: proc_objects_one_hot
+- name: order
+  file: ./data/order.parquet
+  features: features
+  transform:
+    order_id: proc_raw
+    account_id: proc_raw
+    bank_to: proc_objects_one_hot
+    account_to: proc_raw
+    amount: proc_raw
+    k_symbol: proc_objects_one_hot
+- name: card
+  file: ./data/card.parquet
+  features: features
+  transform:
+    card_id: proc_raw
+    disp_id: proc_raw
+    type: proc_objects_one_hot
+    issued: proc_datetime
+- name: account
+  file: ./data/account.parquet
+  features: features
+  transform:
+    account_id: proc_raw
+    district_id: proc_objects_one_hot
+    frequency: proc_objects_one_hot
+    date: proc_datetime
+- name: client
+  file: ./data/client.parquet
+  features: features
+  transform:
+    client_id: proc_raw
+    gender: proc_objects_one_hot
+    birth_date: proc_datetime
+    district_id: proc_objects_one_hot
+- name: disp
+  file: ./data/disp.parquet
+  features: features
+  transform:
+    disp_id: proc_raw
+    client_id: proc_raw
+    account_id: proc_raw
+    type: proc_objects_one_hot
+- name: district
+  file: ./data/district.parquet
+  features: features
+  transform:
+    district_id: proc_raw
+    A2: proc_objects_string
+    A3: proc_objects_one_hot
+    A4: proc_raw
+    A5: proc_raw
+    A6: proc_raw
+    A7: proc_raw
+    A8: proc_objects_one_hot
+    A9: proc_objects_one_hot
+    A10: proc_raw
+    A11: proc_raw
+    A12: proc_raw
+    A13: proc_raw
+    A14: proc_raw
+    A15: proc_raw
+    A16: proc_raw
 edges:
 - name: account_client
   from: account
