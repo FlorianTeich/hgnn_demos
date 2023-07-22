@@ -23,6 +23,7 @@ from .utils import load_yaml
 
 app = typer.Typer()
 
+
 @app.command()
 def generate_toy_data(num_samples: int=50000):
     """Generate toy data"""
@@ -60,6 +61,8 @@ def migrate_data_to_kuzu(yamlfile="default.yml"):
 @app.command()
 def train_test_loop(yamlfile="default.yml"):
     """Train HGNN on the toy data"""
+    import os
+    import sys
     config = load_yaml(yamlfile)
     db = kuzu.Database(config["backend"]["uri"])
 
@@ -77,7 +80,9 @@ def train_test_loop(yamlfile="default.yml"):
     batch = batch.to(device)
     metadata = batch.metadata()
 
-    module = __import__(config["script"])
+    sys.path.append(os.path.abspath(yamlfile[:yamlfile.rfind("/") + 1] + config["script"][:(config["script"].rfind("/") + 1)]))
+    module = __import__(config["script"][(config["script"].rfind("/") + 1):])
+    #module = __import__(config["script"])
     mdl = getattr(module, config["task"]["model"])
     margs = config["task"]["model_args"]
     hmargs = config["task"]["heteromodel_args"]
@@ -177,6 +182,105 @@ def prepare_transformer_benchmark():
     final_df["history"] = [i + " " + j for i, j in zip(diagnosis_hist, drug_hist)]
     final_df["label"] = final_df["label"].astype(int)
     final_df.to_parquet(str(pathlib.Path(__file__).parent.parent.resolve()) + "/data/final.parquet")
+
+
+@app.command()
+def neural_architecture_search(yamlfile="default.yml"):
+    """Train HGNN on the toy data"""
+    import os
+    import sys
+    config = load_yaml(yamlfile)
+    db = kuzu.Database(config["backend"]["uri"])
+
+    target_entity = config["task"]["target_entity"]
+
+    train_inds = torch.tensor(pd.read_parquet(config["task"]["train_inds"])["ids"].values, dtype=torch.long)
+    test_inds = torch.tensor(pd.read_parquet(config["task"]["test_inds"])["ids"].values, dtype=torch.long)
+    
+    train_loader, test_loader = utils.get_loaders(db, config["task"]["batch_size"], train_inds, test_inds, config["task"]["target_entity"])
+
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+    its = iter(train_loader)
+    batch = next(its)
+    batch = batch.to(device)
+    metadata = batch.metadata()
+
+    sys.path.append(os.path.abspath(yamlfile[:yamlfile.rfind("/") + 1] + config["script"][:(config["script"].rfind("/") + 1)]))
+    module = __import__(config["script"][(config["script"].rfind("/") + 1):])
+    #module = __import__(config["script"])
+    mdl = getattr(module, config["task"]["model"])
+    margs = config["task"]["model_args"]
+    hmargs = config["task"]["heteromodel_args"]
+    model = mdl(**margs)
+    model = to_hetero(model, metadata, **hmargs).to(device)
+
+    opt = getattr(optim, config["task"]["optimizer"])
+    oargs = config["task"]["optimizer_args"]
+    optimizer = opt(model.parameters(), **oargs)
+
+    out = model(batch.x_dict, batch.edge_index_dict, batch.batch_dict)
+
+    writer = SummaryWriter(str(pathlib.Path(__file__).parent.parent.resolve()) + "/runs/" + str(datetime.datetime.now()))
+
+    def train(epoch=0):
+        model.train()
+        preds = []
+        ytrue = []
+        all_loss = 0.0
+        for btch in train_loader:
+            try:
+                btch = btch.to(device, non_blocking=True)
+                optimizer.zero_grad()
+                out = model(btch.x_dict, btch.edge_index_dict, btch.batch_dict)
+                loss = F.cross_entropy(out, btch[target_entity].y.long().view(-1))
+                loss.backward()
+                optimizer.step()
+                preds.extend(torch.argmax(torch.softmax(out, dim=-1), dim=-1).detach().tolist())
+                ytrue.extend(btch[target_entity].y.tolist())
+                all_loss += loss.item() / len(btch[target_entity].y.tolist())
+            except:
+                pass
+        acc = accuracy_score(ytrue, preds)
+        #print("Train Loss:", all_loss)
+        #print("Train Acc:", acc)
+        writer.add_scalar("Loss/train", all_loss, epoch)
+        writer.add_scalar("Acc/train", acc, epoch)
+        all_loss = 0.0
+        preds = []
+        ytrue = []
+
+    @torch.no_grad()
+    def test(epoch=0):
+        model.eval()
+        preds = []
+        ytrue = []
+        all_loss = 0.0
+        for btch in test_loader:
+            try:
+                btch = btch.to(device, non_blocking=True)
+                out = model(btch.x_dict, btch.edge_index_dict, btch.batch_dict)
+                loss = F.cross_entropy(out, btch[target_entity].y.long().view(-1))
+                preds.extend(torch.argmax(torch.softmax(out, dim=-1), dim=-1).detach().tolist())
+                ytrue.extend(btch[target_entity].y.tolist())
+                all_loss += loss.item() / len(btch[target_entity].y.tolist())
+            except:
+                pass
+        acc = accuracy_score(ytrue, preds)
+        #print("Test Loss:", all_loss)
+        #print("Test Acc:", acc)
+        writer.add_scalar("Loss/test", all_loss, epoch)
+        writer.add_scalar("Acc/test", acc, epoch)
+        all_loss = 0.0
+        preds = []
+        ytrue = []
+
+    for i in tqdm(range(5)):
+        train(i)
+        test(i)
+    
+    torch.save(model.state_dict(), config["task"]["model_checkpoints"])
+
 
 @app.command()
 def benchmark_transformer():
