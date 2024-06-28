@@ -20,7 +20,7 @@ Person 1:
 
 Since the source data is relational, a significant amount of time needs to be invested into Feature Engineering: As any Person may only have a certain target label but any amount of raw features (drugs consumed as well as diagnoses) the data would be required to be aggregated in order to generate features for each person.
 Such aggregation of secondary entity features is risky as we possibly throw away critical information.
-The advantage of HGNNs: we do not need any 
+The advantage of HGNNs: we do not need any
 
 ### Data Structures
 
@@ -42,8 +42,8 @@ Drug:
 git clone https://github.com/FlorianTeich/hgnn_demos
 cd hgnn_demos
 mkdir data
-pipenv shell
-pipenv install
+poetry shell
+poetry install
 cd src
 python manage.py --help
 ```
