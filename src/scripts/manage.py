@@ -5,14 +5,26 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy import Column, Integer, String, Float, ForeignKey
 from sqlalchemy.orm import relationship
+from sqlalchemy import inspect
 from typing import Optional
 import logging
 import pandas as pd
 import numpy as np
 import typer
+from utils_neo4j import conn, insert_data
 
+
+DEFAULT_SQLITE_DB = "sqlite:///data.db"
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+log = logging.getLogger(__name__)
+# Set format
+formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+# set format for console
+console = logging.StreamHandler()
+console.setFormatter(formatter)
+log.addHandler(console)
+log.propagate = False
+
 app = typer.Typer()
 
 
@@ -77,7 +89,7 @@ def store_data_in_relational_db(
         # Store both tables in a SQLite database and use foreign key constraints and relationships
 
         # Create SQLite database
-        engine = create_engine("sqlite:///data.db")
+        engine = create_engine(DEFAULT_SQLITE_DB)
         Base = declarative_base()
 
         # Define main entity table
@@ -132,7 +144,7 @@ def store_data_in_relational_db(
 def generate_toy_data_in_relational_db(
     num_samples: int = 1_000,
     num_related_entities: int = 10_000,
-    relatinal_db: str = "sqlite",
+    relational_db: str = "sqlite",
 ) -> None:
     """Generate toy data
 
@@ -144,16 +156,92 @@ def generate_toy_data_in_relational_db(
     """
     args: Optional[dict] = None
     df, df_rel = generate_toy_data(num_samples, num_related_entities)
-    store_data_in_relational_db(df, df_rel, db=relatinal_db, args=args)
+    store_data_in_relational_db(df, df_rel, db=relational_db, args=args)
     log.info("🚀 Data generated and stored in relational database")
 
 
+def add_table_to_graph_db(
+    tablename: str,
+    tabledata: pd.DataFrame,
+    pk: str | None = None,
+) -> None:
+    """Add table to graph database
+
+    Args:
+        tablename (str): Name of the table
+        tabledata (pd.DataFrame): Dataframe of the table
+        pk (str | None): Primary key of the table
+
+    Returns:
+        None
+    """
+    log.info(f"🔵 Adding table {tablename} to graph database")
+    # Add table to graph database
+    conn.query(f"DROP CONSTRAINT {tablename} IF EXISTS")
+    if pk is not None:
+        conn.query(
+            f"CREATE CONSTRAINT {tablename} IF NOT EXISTS FOR ({tablename}:{tablename}) REQUIRE {tablename}.{pk} IS UNIQUE"
+        )
+    # conn.query("MATCH (n) DETACH DELETE n")
+    for column in tabledata.columns:
+        conn.query(
+            f"CREATE INDEX FOR ({tablename}:{tablename}) ON ({tablename}.{column})"
+        )
+
+    columnspecs = ", ".join([f"{column}: row.{column}" for column in tabledata.columns])
+    query = f"""
+            UNWIND $rows AS row
+            MERGE ({tablename}:{tablename} {columnspecs}) ON CREATE SET {tablename}.{pk} = row.{pk}
+            RETURN count(*) as total
+            """
+    return conn.query(query, parameters={"rows": tabledata.to_dict("records")})
+
+
+def add_relation_to_graph_db(
+    relation_name: str,
+    source_table: str,
+    target_table: str,
+    source_column: str,
+    target_column: str,
+    relationdata: pd.DataFrame,
+    batch_size: int = 5_000,
+) -> None:
+    # Create indexes for the properties used in the MERGE statement
+    query = f"""
+    UNWIND $rows as row
+    MERGE ({source_table}:{source_table} {id:row.{source_column}})
+
+    WITH {source_table}, row.ICD AS icds
+    MATCH ({target_table}:{target_table} {name: {target_column}})
+    MERGE ({source_table})-[:{relation_name}]->({target_table})
+
+    RETURN count(distinct {target_table}) as total
+    """
+
+    return insert_data(query, relationdata, batch_size)
+
+
 @app.command()
-def convert_relational_db_to_graph_db() -> None:
+def convert_relational_db_to_graph_db(source: str = DEFAULT_SQLITE_DB) -> None:
     """Convert relational database to graph database"""
     log.info("🔁 Converting relational database to graph database")
     # Convert relational database to graph database
-    pass
+    # Get list of tables inside the relational database
+    engine = create_engine(source)
+    inspector = inspect(engine)
+    relational_tables = inspector.get_table_names()
+    # relational_relations = inspector.get_foreign_keys()
+    connnection = engine.connect()
+
+    for table in relational_tables:
+        # Get pk of a table:
+        pk = inspector.get_pk_constraint(table)
+        add_table_to_graph_db(
+            table, pd.read_sql(f"SELECT * FROM {table}", connnection), pk
+        )
+
+    # for relation in relational_relations:
+    #    add_relation_to_graph_db()
 
 
 if __name__ == "__main__":
