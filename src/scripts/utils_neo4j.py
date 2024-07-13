@@ -81,6 +81,32 @@ def fetch_data(query, params: dict = {}) -> pd.DataFrame:
         return pd.DataFrame([r.values() for r in result], columns=result.keys())
 
 
+def drop_constraint(name: str) -> list[Result]:
+    """Drop a constraint in Neo4j
+
+    Args:
+        name (str): Name of the constraint
+
+    Returns:
+        list[Result]: List with the query results
+    """
+    query = f"DROP CONSTRAINT {name} IF EXISTS"
+    return conn.query(query)
+
+
+def drop_index(name: str) -> list[Result]:
+    """Drop a index in Neo4j
+
+    Args:
+        name (str): Name of the index
+
+    Returns:
+        list[Result]: List with the query results
+    """
+    query = f"DROP INDEX {name} IF EXISTS"
+    return conn.query(query)
+
+
 def clean_db() -> None:
     """Clean the Neo4j database
 
@@ -90,18 +116,14 @@ def clean_db() -> None:
     # Remove nodes and relationships
     query = "MATCH (n) DETACH DELETE n"
     conn.query(query)
-    # Remove indexes
-    query = "SHOW INDEXES"
-    response = conn.query(query)
-    for index in response:
-        query = f"DROP INDEX {index['name']} IF EXISTS"
-        conn.query(query)
     # Remove constraints
-    query = "SHOW CONSTRAINTS"
-    response = conn.query(query)
+    response = get_all_constraints()
     for constraint in response:
-        query = f"DROP CONSTRAINT {constraint['name']}_unique IF EXISTS"
-        conn.query(query)
+        drop_constraint(constraint["name"])
+    # Remove indexes
+    response = get_all_indexes()
+    for index in response:
+        drop_index(index["name"])
 
 
 def return_all_nodes() -> list[Result]:

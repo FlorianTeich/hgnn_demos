@@ -17,7 +17,7 @@ from sqlalchemy import (
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, sessionmaker
 from tqdm import tqdm
-from utils_neo4j import conn, insert_data
+from utils_neo4j import clean_db, conn, drop_constraint, insert_data
 
 DEFAULT_SQLITE_DB = "sqlite:///data.db"
 logging.basicConfig(level=logging.INFO)
@@ -189,6 +189,7 @@ def add_table_to_graph_db(
     log.info("🔵 Adding table %s to graph database", tablename)
     # Add table to graph database
     # conn.query(f"DROP CONSTRAINT {tablename}_unique")
+    drop_constraint(f"{tablename}_unique")
     if primarykey is not None:
         conn.query(
             f"CREATE CONSTRAINT {tablename}_unique IF NOT EXISTS FOR "
@@ -235,9 +236,9 @@ def add_relation_to_graph_db(
     # Create indexes for the properties used in the MERGE statement
     query = f"""
     UNWIND $rows as row
-    MERGE ({source_table}:{source_table} {{{source_column}: row.{source_column}}})
+    MERGE (s:{source_table} {{{source_column}: row.{source_column}}})
 
-    WITH {source_table}, row.{target_column} AS {target_column}
+    WITH s, row.{target_column} AS {target_column}
     MATCH (t:{target_table} {{{target_column}: {target_column}}})
     MERGE (s)-[:{relation_name}]->(t)
 
@@ -257,7 +258,7 @@ def convert_relational_db_to_graph_db(source: str = DEFAULT_SQLITE_DB) -> None:
     inspector = inspect(engine)
     relational_tables = inspector.get_table_names()
     connnection = engine.connect()
-    conn.query("MATCH (n) DETACH DELETE n")
+    clean_db()
 
     for table in relational_tables:
         # Get pk of a table:
