@@ -4936,4 +4936,4 @@ ipywidgets = ">=8.0.0"
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.11"
-content-hash = "797b93cc97c306ed1c667fc6dfb6f8209f57977bda0c527ad56d884c7014578c"
+content-hash = "06e3714b7a13d20d55d21e1c8d3f0f14c4d8eb99d483be6a79f99072d9c82cfe"

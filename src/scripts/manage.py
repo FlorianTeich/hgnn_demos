@@ -1,18 +1,23 @@
 """Manage Graph Datasets and prepare them for GNNs"""
-from tqdm import trange, tqdm
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy import Column, Integer, String, Float, ForeignKey
-from sqlalchemy.orm import relationship
-from sqlalchemy import inspect
-from typing import Optional
 import logging
-import pandas as pd
-import numpy as np
-import typer
-from utils_neo4j import conn, insert_data
+from typing import Optional
 
+import numpy as np
+import pandas as pd
+import typer
+from sqlalchemy import (
+    Column,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    create_engine,
+    inspect,
+)
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import relationship, sessionmaker
+from tqdm import tqdm
+from utils_neo4j import conn, insert_data
 
 DEFAULT_SQLITE_DB = "sqlite:///data.db"
 logging.basicConfig(level=logging.INFO)
@@ -41,7 +46,7 @@ def generate_toy_data(
     """
     log.info("⭐ Generating data")
     # Create main entity table
-    df = pd.DataFrame(
+    dataframe = pd.DataFrame(
         {
             "entity_id": np.arange(num_samples),
             "entity_name": [f"entity_{i}" for i in range(num_samples)],
@@ -51,11 +56,11 @@ def generate_toy_data(
     )
 
     # Create related entity table
-    df_rel = pd.DataFrame(
+    dataframe_rel = pd.DataFrame(
         {
             "entity_id": np.arange(num_related_entities),
             "related_entity_id": np.random.choice(
-                df["entity_id"], num_related_entities
+                dataframe["entity_id"], num_related_entities
             ),
             "feature_1": np.random.rand(num_related_entities),
             "feature_2": np.random.rand(num_related_entities),
@@ -63,21 +68,21 @@ def generate_toy_data(
         }
     )
 
-    return df, df_rel
+    return dataframe, dataframe_rel
 
 
 def store_data_in_relational_db(
-    df: pd.DataFrame,
-    df_rel: pd.DataFrame,
-    db: str = "sqlite",
+    dataframe: pd.DataFrame,
+    dataframe_rel: pd.DataFrame,
+    database: str = "sqlite",
     args: Optional[dict] = None,
 ) -> None:
     """Store data in relational database
 
     Args:
-        df (pd.DataFrame): Main entity table
-        df_rel (pd.DataFrame): Related entity table
-        db (str): Database to store data
+        dataframe (pd.DataFrame): Main entity table
+        dataframe_rel (pd.DataFrame): Related entity table
+        database (str): Database to store data
         args (Optional[dict]): Additional arguments
 
     Returns:
@@ -85,7 +90,7 @@ def store_data_in_relational_db(
     """
     log.info("✨ Storing data in relational database")
     # Store data in relational database
-    if db == "sqlite":
+    if database == "sqlite":
         # Store both tables in a SQLite database and use foreign key constraints and relationships
 
         # Create SQLite database
@@ -94,6 +99,8 @@ def store_data_in_relational_db(
 
         # Define main entity table
         class Entity(Base):
+            """Main entity table"""
+
             __tablename__ = "entity"
             entity_id = Column(Integer, primary_key=True)
             entity_name = Column(String)
@@ -103,6 +110,8 @@ def store_data_in_relational_db(
 
         # Define related entity table
         class RelatedEntity(Base):
+            """Related entity table"""
+
             __tablename__ = "related_entity"
             entity_id = Column(Integer, primary_key=True)
             related_entity_id = Column(Integer, ForeignKey("entity.entity_id"))
@@ -116,7 +125,7 @@ def store_data_in_relational_db(
         # Store data
         Session = sessionmaker(bind=engine)
         session = Session()
-        for i, row in tqdm(df.iterrows()):
+        for _, row in tqdm(dataframe.iterrows()):
             entity = Entity(
                 entity_id=row["entity_id"],
                 entity_name=row["entity_name"],
@@ -126,7 +135,7 @@ def store_data_in_relational_db(
             session.add(entity)
         session.commit()
 
-        for i, row in tqdm(df_rel.iterrows()):
+        for _, row in tqdm(dataframe_rel.iterrows()):
             related_entity = RelatedEntity(
                 related_entity_id=row["related_entity_id"],
                 entity_id=row["entity_id"],
@@ -137,7 +146,7 @@ def store_data_in_relational_db(
             session.add(related_entity)
         session.commit()
     else:
-        raise ValueError(f"Database {db} not supported")
+        raise ValueError(f"Database {database} not supported")
 
 
 @app.command()
@@ -155,15 +164,17 @@ def generate_toy_data_in_relational_db(
         None
     """
     args: Optional[dict] = None
-    df, df_rel = generate_toy_data(num_samples, num_related_entities)
-    store_data_in_relational_db(df, df_rel, db=relational_db, args=args)
+    dataframe, dataframe_rel = generate_toy_data(num_samples, num_related_entities)
+    store_data_in_relational_db(
+        dataframe, dataframe_rel, database=relational_db, args=args
+    )
     log.info("🚀 Data generated and stored in relational database")
 
 
 def add_table_to_graph_db(
     tablename: str,
     tabledata: pd.DataFrame,
-    pk: str | None = None,
+    primarykey: str | None = None,
 ) -> None:
     """Add table to graph database
 
@@ -175,12 +186,13 @@ def add_table_to_graph_db(
     Returns:
         None
     """
-    log.info(f"🔵 Adding table {tablename} to graph database")
+    log.info("🔵 Adding table %s to graph database", tablename)
     # Add table to graph database
     # conn.query(f"DROP CONSTRAINT {tablename}_unique")
-    if pk is not None:
+    if primarykey is not None:
         conn.query(
-            f"CREATE CONSTRAINT {tablename}_unique IF NOT EXISTS FOR (e:{tablename}) REQUIRE e.{pk} IS UNIQUE"
+            f"CREATE CONSTRAINT {tablename}_unique IF NOT EXISTS FOR "
+            + f"(e:{tablename}) REQUIRE e.{primarykey} IS UNIQUE"
         )
 
     for column in tabledata.columns:
@@ -192,7 +204,7 @@ def add_table_to_graph_db(
     columnspecs = ", ".join([f"{column}: row.{column}" for column in tabledata.columns])
     query = f"""
             UNWIND $rows AS row
-            MERGE (e:{tablename} {{{columnspecs}}}) ON CREATE SET e.{pk} = row.{pk}
+            MERGE (e:{tablename} {{{columnspecs}}}) ON CREATE SET e.{primarykey} = row.{primarykey}
             RETURN count(*) as total
             """
     return conn.query(query, parameters={"rows": tabledata.to_dict("records")})
@@ -207,6 +219,19 @@ def add_relation_to_graph_db(
     relationdata: pd.DataFrame,
     batch_size: int = 5_000,
 ) -> None:
+    """Add relation to graph database
+
+    Args:
+        relation_name (str): Name of the relation
+        source_table (str): Source table
+        target_table (str): Target table
+        source_column (str): Source column
+        target_column (str): Target column
+        relationdata (pd.DataFrame): Dataframe with the relation data
+        batch_size (int): Batch size for the relation data
+
+    Returns:
+        None"""
     # Create indexes for the properties used in the MERGE statement
     query = f"""
     UNWIND $rows as row
@@ -236,15 +261,15 @@ def convert_relational_db_to_graph_db(source: str = DEFAULT_SQLITE_DB) -> None:
 
     for table in relational_tables:
         # Get pk of a table:
-        pk = inspector.get_pk_constraint(table)["constrained_columns"][0]
+        primarykey = inspector.get_pk_constraint(table)["constrained_columns"][0]
         add_table_to_graph_db(
-            table, pd.read_sql(f"SELECT * FROM {table}", connnection), pk
+            table, pd.read_sql(f"SELECT * FROM {table}", connnection), primarykey
         )
 
     for table in relational_tables:
         relational_relations = inspector.get_foreign_keys(table)
         for relation in relational_relations:
-            pk = inspector.get_pk_constraint(table)["constrained_columns"][0]
+            primarykey = inspector.get_pk_constraint(table)["constrained_columns"][0]
             const_col = relation["constrained_columns"][0]
             add_relation_to_graph_db(
                 relation["referred_table"]
@@ -258,7 +283,9 @@ def convert_relational_db_to_graph_db(source: str = DEFAULT_SQLITE_DB) -> None:
                 relation["referred_table"],
                 relation["constrained_columns"][0],
                 relation["referred_columns"][0],
-                pd.read_sql(f"SELECT {pk}, {const_col} FROM {table}", connnection),
+                pd.read_sql(
+                    f"SELECT {primarykey}, {const_col} FROM {table}", connnection
+                ),
             )
             # add reverse relationship
             add_relation_to_graph_db(
@@ -273,10 +300,12 @@ def convert_relational_db_to_graph_db(source: str = DEFAULT_SQLITE_DB) -> None:
                 table,
                 relation["referred_columns"][0],
                 relation["constrained_columns"][0],
-                pd.read_sql(f"SELECT {const_col}, {pk} FROM {table}", connnection),
+                pd.read_sql(
+                    f"SELECT {const_col}, {primarykey} FROM {table}", connnection
+                ),
             )
 
 
 if __name__ == "__main__":
-    #app()
+    # app()
     convert_relational_db_to_graph_db()

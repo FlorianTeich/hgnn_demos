@@ -1,10 +1,11 @@
+"""Manage neo4j database operations"""
 import os
 import time
 
 import pandas as pd
 import torch
 from dotenv import load_dotenv
-from neo4j import GraphDatabase
+from neo4j import GraphDatabase, Result
 
 load_dotenv("../.env")
 
@@ -14,6 +15,8 @@ NEO4J_HOST = "bolt://127.0.0.1:7687"
 
 
 class Neo4jConnection:
+    """Class to handle the connection to Neo4j"""
+
     def __init__(self, uri: str, user: str, pwd: str):
         self.__uri = uri
         self.__user = user
@@ -23,26 +26,37 @@ class Neo4jConnection:
             self.__driver = GraphDatabase.driver(
                 self.__uri, auth=(self.__user, self.__pwd)
             )
-        except Exception as e:
-            print("Failed to create the driver:", e)
+        except RuntimeError as exc:
+            print("Failed to create the driver:", exc)
 
     def close(self):
+        """Close the connection to Neo4j"""
         if self.__driver is not None:
             self.__driver.close()
 
-    def query(self, query: str, parameters=None, db=None):
+    def query(self, query: str, parameters=None, database=None):
+        """Execute a query in Neo4j
+
+        Args:
+            query (str): Cypher query to execute
+            parameters (dict): Parameters to fill the query
+            db (str): Database to connect to
+
+        Returns:
+            list: List with the query results
+        """
         assert self.__driver is not None, "Driver not initialized!"
         session = None
         response = None
         try:
             session = (
-                self.__driver.session(database=db)
-                if db is not None
+                self.__driver.session(database=database)
+                if database is not None
                 else self.__driver.session()
             )
             response = list(session.run(query, parameters))
-        except Exception as e:
-            print("Query failed:", e)
+        except Exception as exc:
+            print("Query failed:", exc)
         finally:
             if session is not None:
                 session.close()
@@ -51,7 +65,7 @@ class Neo4jConnection:
 
 conn = Neo4jConnection(uri=NEO4J_HOST, user=NEO4J_USER, pwd=NEO4J_PASSWORD)
 
-driver = GraphDatabase.driver(NEO4J_HOST, auth=(NEO4J_USER, NEO4J_PASSWORD))
+DRIVER = GraphDatabase.driver(NEO4J_HOST, auth=(NEO4J_USER, NEO4J_PASSWORD))
 
 
 def fetch_data(query, params: dict = {}) -> pd.DataFrame:
@@ -62,12 +76,17 @@ def fetch_data(query, params: dict = {}) -> pd.DataFrame:
 
     Returns:
         pd.DataFrame: Dataframe with the query results"""
-    with driver.session() as session:
+    with DRIVER.session() as session:
         result = session.run(query, params)
         return pd.DataFrame([r.values() for r in result], columns=result.keys())
 
 
-def clean_db():
+def clean_db() -> None:
+    """Clean the Neo4j database
+
+    Returns:
+        None
+    """
     # Remove nodes and relationships
     query = "MATCH (n) DETACH DELETE n"
     conn.query(query)
@@ -85,12 +104,17 @@ def clean_db():
         conn.query(query)
 
 
-def return_all_nodes():
+def return_all_nodes() -> list[Result]:
+    """Return all nodes in Neo4j
+
+    Returns:
+        list[Result]: List with the query results
+    """
     query = "MATCH (n) RETURN n"
     return conn.query(query)
 
 
-def create_single_node(label: str, properties: dict):
+def create_single_node(label: str, properties: dict) -> list[Result]:
     """Create a single node in Neo4j
 
     Args:
@@ -98,19 +122,29 @@ def create_single_node(label: str, properties: dict):
         properties (dict): Properties of the node
 
     Returns:
-        None
+        list[Result]: List with the query results
     """
     properties = ", ".join([f"{key}: '{value}'" for key, value in properties.items()])
     query = f"CREATE (n:{label} {{{properties}}}) RETURN n"
     return conn.query(query)
 
 
-def get_all_indexes():
+def get_all_indexes() -> list[Result]:
+    """Get all indexes in Neo4j
+
+    Returns:
+        list[Result]: List with the query results
+    """
     query = "SHOW INDEXES"
     return conn.query(query)
 
 
-def get_all_constraints():
+def get_all_constraints() -> list[Result]:
+    """Get all constraints in Neo4j
+
+    Returns:
+        list[Result]: List with the query results
+    """
     query = "SHOW CONSTRAINTS"
     return conn.query(query)
 
@@ -121,46 +155,71 @@ def create_two_nodes_and_a_relation(
     type2: str = "Email",
     properties2: dict = {"email": "[email protected]"},
     relation: str = "HAS_EMAIL",
-):
+) -> list[Result]:
     property_string1 = ", ".join(
         [f"{key}: '{value}'" for key, value in properties1.items()]
     )
     property_string2 = ", ".join(
         [f"{key}: '{value}'" for key, value in properties2.items()]
     )
-    query = f"""
-    CREATE (entity_type_1:{type1} {{{property_string1}}})-[:{relation}]->(entity_type_2:{type2} {{{property_string2}}})
-    """
+    query = (
+        f"""
+    CREATE (entity_type_1:{type1} {{{property_string1}}})-[:{relation}]"""
+        + f"""->(entity_type_2:{type2} {{{property_string2}}})"""
+    )
     return conn.query(query)
 
 
 def match_two_node_types_and_relation(
     type1: str = "Person", type2: str = "Email", relation: str = "HAS_EMAIL"
-):
-    query = f"""
-    MATCH (entity_type_1:{type1})-[relation:{relation}]->(entity_type_2:{type2}) RETURN entity_type_1, entity_type_2, relation"""
+) -> list[Result]:
+    """Match two node types and a relation in Neo4j
+
+    Args:
+        type1 (str): Label of the first node
+        type2 (str): Label of the second node
+        relation (str): Label of the relation
+
+    Returns:
+        list[Result]: List with the query results
+    """
+    query = (
+        f"""
+    MATCH (entity_type_1:{type1})-[relation:{relation}]->(entity_type_2:{type2}) """
+        + """RETURN entity_type_1, entity_type_2, relation"""
+    )
     return conn.query(query)
 
 
 def create_index(label: str, property: str, indexname: str):
+    """Create an index in Neo4j
+
+    Args:
+        label (str): Label of the node
+        property (str): Property to index
+        indexname (str): Name of the index
+
+    Returns:
+        list[Result]: List with the query results
+    """
     query = f"""
     CREATE INDEX {indexname} FOR (p:{label}) ON (p.{property})
     """
     return conn.query(query)
 
 
-def load_node(cypher, index_col, encoders=None, **kwargs):
+def load_node(cypher, index_col, encoders=None):
     """Execute the cypher query and retrieve data from Neo4j"""
-    df = fetch_data(cypher)
-    df.set_index(index_col, inplace=True)
+    dataframe = fetch_data(cypher)
+    dataframe.set_index(index_col, inplace=True)
     # Define node mapping
-    mapping = {index: i for i, index in enumerate(df.index.unique())}
+    mapping = {index: i for i, index in enumerate(dataframe.index.unique())}
     # Define node features
-    x = None
+    x_data = None
     if encoders is not None:
-        xs = [encoder(df[col]) for col, encoder in encoders.items()]
-        x = torch.cat(xs, dim=-1)
-    return x, mapping
+        xs_data = [encoder(dataframe[col]) for col, encoder in encoders.items()]
+        x_data = torch.cat(xs_data, dim=-1)
+    return x_data, mapping
 
 
 def load_edge(
@@ -173,15 +232,15 @@ def load_edge(
     **kwargs,
 ):
     """Execute the cypher query and retrieve data from Neo4j"""
-    df = fetch_data(cypher)
+    dataframe = fetch_data(cypher)
     # Define edge index
-    src = [src_mapping[index] for index in df[src_index_col]]
-    dst = [dst_mapping[index] for index in df[dst_index_col]]
+    src = [src_mapping[index] for index in dataframe[src_index_col]]
+    dst = [dst_mapping[index] for index in dataframe[dst_index_col]]
     edge_index = torch.tensor([src, dst])
     # Define edge features
     edge_attr = None
     if encoders is not None:
-        edge_attrs = [encoder(df[col]) for col, encoder in encoders.items()]
+        edge_attrs = [encoder(dataframe[col]) for col, encoder in encoders.items()]
         edge_attr = torch.cat(edge_attrs, dim=-1)
 
     return edge_index, edge_attr
