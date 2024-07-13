@@ -1,7 +1,8 @@
 import os
 import time
-import torch
+
 import pandas as pd
+import torch
 from dotenv import load_dotenv
 from neo4j import GraphDatabase
 
@@ -64,6 +65,88 @@ def fetch_data(query, params: dict = {}) -> pd.DataFrame:
     with driver.session() as session:
         result = session.run(query, params)
         return pd.DataFrame([r.values() for r in result], columns=result.keys())
+
+
+def clean_db():
+    # Remove nodes and relationships
+    query = "MATCH (n) DETACH DELETE n"
+    conn.query(query)
+    # Remove indexes
+    query = "SHOW INDEXES"
+    response = conn.query(query)
+    for index in response:
+        query = f"DROP INDEX {index['name']} IF EXISTS"
+        conn.query(query)
+    # Remove constraints
+    query = "SHOW CONSTRAINTS"
+    response = conn.query(query)
+    for constraint in response:
+        query = f"DROP CONSTRAINT {constraint['name']}_unique IF EXISTS"
+        conn.query(query)
+
+
+def return_all_nodes():
+    query = "MATCH (n) RETURN n"
+    return conn.query(query)
+
+
+def create_single_node(label: str, properties: dict):
+    """Create a single node in Neo4j
+
+    Args:
+        label (str): Label of the node
+        properties (dict): Properties of the node
+
+    Returns:
+        None
+    """
+    properties = ", ".join([f"{key}: '{value}'" for key, value in properties.items()])
+    query = f"CREATE (n:{label} {{{properties}}}) RETURN n"
+    return conn.query(query)
+
+
+def get_all_indexes():
+    query = "SHOW INDEXES"
+    return conn.query(query)
+
+
+def get_all_constraints():
+    query = "SHOW CONSTRAINTS"
+    return conn.query(query)
+
+
+def create_two_nodes_and_a_relation(
+    type1: str = "Person",
+    properties1: dict = {"name": "John Doe"},
+    type2: str = "Email",
+    properties2: dict = {"email": "[email protected]"},
+    relation: str = "HAS_EMAIL",
+):
+    property_string1 = ", ".join(
+        [f"{key}: '{value}'" for key, value in properties1.items()]
+    )
+    property_string2 = ", ".join(
+        [f"{key}: '{value}'" for key, value in properties2.items()]
+    )
+    query = f"""
+    CREATE (entity_type_1:{type1} {{{property_string1}}})-[:{relation}]->(entity_type_2:{type2} {{{property_string2}}})
+    """
+    return conn.query(query)
+
+
+def match_two_node_types_and_relation(
+    type1: str = "Person", type2: str = "Email", relation: str = "HAS_EMAIL"
+):
+    query = f"""
+    MATCH (entity_type_1:{type1})-[relation:{relation}]->(entity_type_2:{type2}) RETURN entity_type_1, entity_type_2, relation"""
+    return conn.query(query)
+
+
+def create_index(label: str, property: str, indexname: str):
+    query = f"""
+    CREATE INDEX {indexname} FOR (p:{label}) ON (p.{property})
+    """
+    return conn.query(query)
 
 
 def load_node(cypher, index_col, encoders=None, **kwargs):
