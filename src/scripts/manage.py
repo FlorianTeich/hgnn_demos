@@ -278,5 +278,5 @@ def convert_relational_db_to_graph_db(source: str = DEFAULT_SQLITE_DB) -> None:
 
 
 if __name__ == "__main__":
-    # app()
+    #app()
     convert_relational_db_to_graph_db()
