@@ -177,21 +177,22 @@ def add_table_to_graph_db(
     """
     log.info(f"🔵 Adding table {tablename} to graph database")
     # Add table to graph database
-    conn.query(f"DROP CONSTRAINT {tablename} IF EXISTS")
+    # conn.query(f"DROP CONSTRAINT {tablename}_unique")
     if pk is not None:
         conn.query(
-            f"CREATE CONSTRAINT {tablename} IF NOT EXISTS FOR ({tablename}:{tablename}) REQUIRE {tablename}.{pk} IS UNIQUE"
+            f"CREATE CONSTRAINT {tablename}_unique IF NOT EXISTS FOR (e:{tablename}) REQUIRE e.{pk} IS UNIQUE"
         )
-    # conn.query("MATCH (n) DETACH DELETE n")
+
     for column in tabledata.columns:
+        # conn.query(f"DROP INDEX {tablename}_{column} IF EXISTS")
         conn.query(
-            f"CREATE INDEX FOR ({tablename}:{tablename}) ON ({tablename}.{column})"
+            f"CREATE INDEX {tablename}_{column} FOR (e:{tablename}) ON (e.{column})"
         )
 
     columnspecs = ", ".join([f"{column}: row.{column}" for column in tabledata.columns])
     query = f"""
             UNWIND $rows AS row
-            MERGE ({tablename}:{tablename} {columnspecs}) ON CREATE SET {tablename}.{pk} = row.{pk}
+            MERGE (e:{tablename} {{{columnspecs}}}) ON CREATE SET e.{pk} = row.{pk}
             RETURN count(*) as total
             """
     return conn.query(query, parameters={"rows": tabledata.to_dict("records")})
@@ -209,13 +210,13 @@ def add_relation_to_graph_db(
     # Create indexes for the properties used in the MERGE statement
     query = f"""
     UNWIND $rows as row
-    MERGE ({source_table}:{source_table} {id:row.{source_column}})
+    MERGE ({source_table}:{source_table} {{{source_column}: row.{source_column}}})
 
-    WITH {source_table}, row.ICD AS icds
-    MATCH ({target_table}:{target_table} {name: {target_column}})
-    MERGE ({source_table})-[:{relation_name}]->({target_table})
+    WITH {source_table}, row.{target_column} AS {target_column}
+    MATCH (t:{target_table} {{{target_column}: {target_column}}})
+    MERGE (s)-[:{relation_name}]->(t)
 
-    RETURN count(distinct {target_table}) as total
+    RETURN count(distinct t) as total
     """
 
     return insert_data(query, relationdata, batch_size)
@@ -230,19 +231,52 @@ def convert_relational_db_to_graph_db(source: str = DEFAULT_SQLITE_DB) -> None:
     engine = create_engine(source)
     inspector = inspect(engine)
     relational_tables = inspector.get_table_names()
-    # relational_relations = inspector.get_foreign_keys()
     connnection = engine.connect()
+    conn.query("MATCH (n) DETACH DELETE n")
 
     for table in relational_tables:
         # Get pk of a table:
-        pk = inspector.get_pk_constraint(table)
+        pk = inspector.get_pk_constraint(table)["constrained_columns"][0]
         add_table_to_graph_db(
             table, pd.read_sql(f"SELECT * FROM {table}", connnection), pk
         )
 
-    # for relation in relational_relations:
-    #    add_relation_to_graph_db()
+    for table in relational_tables:
+        relational_relations = inspector.get_foreign_keys(table)
+        for relation in relational_relations:
+            pk = inspector.get_pk_constraint(table)["constrained_columns"][0]
+            const_col = relation["constrained_columns"][0]
+            add_relation_to_graph_db(
+                relation["referred_table"]
+                + "_"
+                + relation["referred_columns"][0]
+                + "_"
+                + relation["constrained_columns"][0]
+                + "_"
+                + table,
+                table,
+                relation["referred_table"],
+                relation["constrained_columns"][0],
+                relation["referred_columns"][0],
+                pd.read_sql(f"SELECT {pk}, {const_col} FROM {table}", connnection),
+            )
+            # add reverse relationship
+            add_relation_to_graph_db(
+                table
+                + "_"
+                + relation["constrained_columns"][0]
+                + "_"
+                + relation["referred_table"]
+                + "_"
+                + relation["referred_columns"][0],
+                relation["referred_table"],
+                table,
+                relation["referred_columns"][0],
+                relation["constrained_columns"][0],
+                pd.read_sql(f"SELECT {const_col}, {pk} FROM {table}", connnection),
+            )
 
 
 if __name__ == "__main__":
-    app()
+    # app()
+    convert_relational_db_to_graph_db()
