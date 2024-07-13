@@ -2,6 +2,7 @@
 import os
 import time
 
+import networkx as nx
 import pandas as pd
 import torch
 from dotenv import load_dotenv
@@ -66,6 +67,38 @@ class Neo4jConnection:
 conn = Neo4jConnection(uri=NEO4J_HOST, user=NEO4J_USER, pwd=NEO4J_PASSWORD)
 
 DRIVER = GraphDatabase.driver(NEO4J_HOST, auth=(NEO4J_USER, NEO4J_PASSWORD))
+
+
+def get_db_query_result_as_networkx(
+    query: str = """MATCH (e:entity)
+    WITH e
+    LIMIT 1
+    MATCH (e)-[r]-(relatedNodes)
+    RETURN e, r, relatedNodes""",
+) -> nx.Graph:
+    """Get the query result as a NetworkX graph
+
+    Args:
+        query (str): Cypher query to execute
+
+    Returns:
+        nx.Graph: NetworkX graph with the query results
+    """
+    results = DRIVER.session().run(query)
+    G = nx.MultiDiGraph()
+    nodes = list(results.graph()._nodes.values())
+    for node in nodes:
+        G.add_node(node.id, labels=node._labels, properties=node._properties)
+    rels = list(results.graph()._relationships.values())
+    for rel in rels:
+        G.add_edge(
+            rel.start_node.id,
+            rel.end_node.id,
+            key=rel.id,
+            type=rel.type,
+            properties=rel._properties,
+        )
+    return G
 
 
 def fetch_data(query, params: dict = {}) -> pd.DataFrame:
